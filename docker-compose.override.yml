@@ -1,0 +1,24 @@
+# Local dev hot-reload layer. `docker compose` auto-merges this on top of
+# docker-compose.yml — no -f flag needed. It bind-mounts host source into the
+# already dev-mode container so edits reload live, without rebuilding the image.
+#
+# Pattern: bind-mount the source dir, then shadow the dependency + build dirs with
+# ANONYMOUS volumes so the host (which may have OS-specific or absent deps) never
+# clobbers the linux deps baked into the image during build.
+#
+# GOTCHA: anonymous volumes persist across `up`. After changing deps (editing
+# package.json + rebuild), recreate volumes so the new deps surface:
+#   docker compose down -v && docker compose up --build
+#
+# Production deploy ignores this file: `docker compose -f docker-compose.yml up -d`.
+
+services:
+  web:
+    # Next dev (Turbopack) watches via inotify on the bind mount. On a VM /
+    # networked FS where FS events don't propagate, uncomment polling.
+    # environment:
+    #   WATCHPACK_POLLING: "true"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules # keep image's linux node_modules (sharp, etc.)
+      - /app/.next # keep dev build cache inside the container

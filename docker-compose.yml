@@ -1,0 +1,32 @@
+name: dbx-agent-chat-ui
+
+# UI-only app — a single Next.js `web` service, no backend (that's the whole point;
+# see the constitution's "UI-Only, No Backend" principle). No host ports are
+# published: the container is reached only over the shared external
+# `timezlab_network`, where the `timezlab_cloudflared` tunnel routes to it by
+# container name:
+#   dbx-ui.timezlab.org -> http://dbx-ui:3000
+#
+# Add that public hostname in the Cloudflare Zero Trust dashboard (the tunnel is
+# token-managed remotely, no local config.yml). Bring the tunnel up first:
+#   docker compose -f ~/timezlab/cloudflared up -d
+
+services:
+  web:
+    container_name: dbx-ui
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      # Non-secret endpoint selection only — these are the sole knobs that reach
+      # the browser bundle. Leave unset to use the app defaults (mock transport).
+      NEXT_PUBLIC_TRANSPORT_MODE: ${NEXT_PUBLIC_TRANSPORT_MODE:-mock}
+      NEXT_PUBLIC_CHAT_ENDPOINT_URL: ${NEXT_PUBLIC_CHAT_ENDPOINT_URL:-}
+    restart: unless-stopped
+    networks:
+      - timezlab_network
+
+networks:
+  # Shared network owned by the timezlab Cloudflare tunnel (timezlab_cloudflared).
+  timezlab_network:
+    external: true
