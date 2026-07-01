@@ -1,0 +1,35 @@
+data: {"type":"response.reasoning_text.delta","item_id":"rs_demo","delta":"The user is asking about the add function. "}
+
+data: {"type":"response.reasoning_text.delta","item_id":"rs_demo","delta":"Let me read the file, then summarize it."}
+
+data: {"type":"response.output_text.delta","item_id":"msg_demo","delta":"I'll take a "}
+
+data: {"type":"response.output_text.delta","item_id":"msg_demo","delta":"quick look at "}
+
+data: {"type":"response.output_text.delta","item_id":"msg_demo","delta":"the code first.\n\n"}
+
+data: {"type":"response.output_item.done","item":{"type":"function_call","id":"fc_1","call_id":"call_1","name":"read_file","arguments":"{\"file_path\":\"src/math/add.ts\",\"offset\":0,\"limit\":100}","status":"completed"}}
+
+data: {"type":"response.output_item.done","item":{"type":"function_call_output","call_id":"call_1","output":"1\texport function add(a: number, b: number) {\n2\t  return a + b;\n3\t}"}}
+
+data: {"type":"response.output_text.delta","item_id":"msg_demo","delta":"## Summary\n\n"}
+
+data: {"type":"response.output_text.delta","item_id":"msg_demo","delta":"The `add` function "}
+
+data: {"type":"response.output_text.delta","item_id":"msg_demo","delta":"returns the sum of "}
+
+data: {"type":"response.output_text.delta","item_id":"msg_demo","delta":"its two arguments:\n\n"}
+
+data: {"type":"response.output_text.delta","item_id":"msg_demo","delta":"```ts\n"}
+
+data: {"type":"response.output_text.delta","item_id":"msg_demo","delta":"function add(a: number, b: number) {\n"}
+
+data: {"type":"response.output_text.delta","item_id":"msg_demo","delta":"  return a + b;\n"}
+
+data: {"type":"response.output_text.delta","item_id":"msg_demo","delta":"}\n"}
+
+data: {"type":"response.output_text.delta","item_id":"msg_demo","delta":"```\n\n"}
+
+data: {"type":"response.output_text.delta","item_id":"msg_demo","delta":"So `add(2, 3)` evaluates to **5**."}
+
+data: {"type":"response.output_item.done","item":{"id":"msg_demo","type":"message","content":[{"text":"## Summary\n\nThe `add` function returns the sum of its two arguments:\n\n```ts\nfunction add(a: number, b: number) {\n  return a + b;\n}\n```\n\nSo `add(2, 3)` evaluates to **5**."}]}}

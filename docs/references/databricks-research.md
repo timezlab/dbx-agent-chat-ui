@@ -78,6 +78,60 @@ For querying agents, Databricks recommends Databricks OpenAI Client for new apps
 
 Source: https://docs.databricks.com/aws/en/generative-ai/agent-framework/query-agent
 
+## Reasoning / "thinking" events
+
+On Databricks, a reasoning model's **thinking** is a **separate content type from the
+answer text** — never part of `output_text`. The AI Playground renders it as a distinct
+collapsible "Thinking" block. Two on-wire shapes depending on the API:
+
+**Responses / `ResponsesAgent`** (the shape this repo's mock recording uses). Thinking is
+its own **reasoning output item**, sibling of the terminal `message` item:
+
+```json
+{ "type": "reasoning", "id": "rs_abc123",
+  "content": [{ "type": "reasoning_text", "text": "Let me work through..." }],
+  "encrypted_content": "<opaque-provider-signature>" }
+```
+
+- Item framed by `response.output_item.added` → `response.output_item.done` with
+  **`item.type == "reasoning"`**.
+- Token-level streaming uses **`response.reasoning_text.delta`** (+ `.done`), or the
+  summarized variant `response.reasoning_summary_text.delta` /
+  `response.reasoning_summary_part.added|done` — the reasoning sibling of
+  `response.output_text.delta`. MLflow `ResponsesAgent` exposes `create_reasoning_item()`
+  (produces the item) and `create_text_delta()` (answer text).
+
+**Chat Completions / Foundation Model API** (Playground default for Claude reasoning
+models). Thinking is a block inside the message `content` array:
+
+```json
+"content": [
+  { "type": "reasoning", "summary": [
+      { "type": "summary_text", "text": "The question is asking about...", "signature": "EqoB..." } ] },
+  { "type": "text", "text": "..." }
+]
+```
+
+`signature` / `encrypted_content` are **opaque** (verification only) — do not parse or
+render them.
+
+> Sourcing caveat: the Databricks *Query reasoning models* page documents the reasoning
+> **block shapes** above but does not enumerate the streaming SSE event names; the
+> `response.reasoning_text.delta` / `response.reasoning_summary_text.delta` names come from
+> the OpenAI **Responses** event spec that MLflow `ResponsesAgent` implements.
+
+**Chat-UI mapping** (this repo): reasoning is a third stream channel beyond
+`token`/`tool`/`error`/`done` — mapped to a `reasoning` event → a `reasoning` `MessagePart`
+rendered as a collapsible "Thinking" block. The committed deepagents recording has **no**
+reasoning items; real reasoning arrives via the (stubbed) real adapters. See
+`.specify/specs/001-chat-mvp/data-model.md` › MessagePart and `contracts/chat-transport.md`.
+
+Sources:
+
+- https://docs.databricks.com/aws/en/machine-learning/model-serving/query-reason-models
+- https://mlflow.org/docs/latest/genai/serving/responses-agent/
+- https://docs.databricks.com/aws/en/large-language-models/ai-playground
+
 ## Databricks App Limits And File Handling
 
 ### Limits Found In Official Docs

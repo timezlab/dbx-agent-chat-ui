@@ -5,14 +5,9 @@
   "packageManager": "pnpm@10.28.2",
   "scripts": {
     "dev": "next dev",
-    "build": "pnpm build:next && pnpm verify:databricks-output",
-    "build:next": "next build",
-    "build:static": "pnpm build",
-    "build:embed": "vite build --config vite.embed.config.ts && pnpm verify:manual-output",
-    "verify:databricks-output": "node scripts/verify-databricks-output.mjs",
-    "verify:manual-output": "node scripts/verify-manual-output.mjs",
-    "pack:static": "pnpm build && node scripts/pack-static-output.mjs",
-    "pack:embed": "pnpm build:embed",
+    "mock:api": "node scripts/mock-api.mjs",
+    "build:manual": "next build && rm -rf out-manual && mv out out-manual && node scripts/verify-manual-output.mjs && cd out-manual && python3 -m zipfile -c ../../manual.zip * && cd .. && rm -rf out-manual",
+    "build:embed": "vite build --config vite.embed.config.ts && node scripts/verify-embed-output.mjs && cp out-embed/index.html ../embed.html && rm -rf out-embed",
     "lint": "eslint",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
@@ -63,6 +58,7 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "^8.1.2",
+    "vite-plugin-singlefile": "^2.3.3",
     "vitest": "^4.1.9"
   }
 }

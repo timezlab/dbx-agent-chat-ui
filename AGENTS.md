@@ -13,7 +13,7 @@ App code lives under `frontend/`.
 
 - **No secrets in the browser bundle** — only `NEXT_PUBLIC_*`, for non-secret endpoint selection.
 - **UI-only** — no backend/BFF, no Databricks auth or credential handling in this repo.
-- **Static-export safe** — no Next route handlers, server actions, cookies, or request-time headers.
+- **Static-export safe** — the shipped `output: "export"` artifact has no Next route handlers, server actions, cookies, or request-time headers. (One exception: a **dev-only** mock route `app/api/chat/route.dev.ts`, gated out of `next build` via `pageExtensions`, so it never reaches the static export. See [`docs/design-docs/dev-mock-endpoint.md`](./docs/design-docs/dev-mock-endpoint.md).)
 - **Backends only via a `ChatTransport` adapter** — components never fetch an endpoint directly.
 - **Customization is a contract** — theme via CSS variables, every component forwards `className`, and endpoint URL/mode/naming are config, never hardcoded. See [`docs/design-docs/customization-and-theming.md`](./docs/design-docs/customization-and-theming.md).
 - Full rationale: [`docs/design-docs/repo-boundaries.md`](./docs/design-docs/repo-boundaries.md).

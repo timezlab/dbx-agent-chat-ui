@@ -24,3 +24,53 @@ and documentation.
 
 v1 / MVP in progress — single streaming chat screen. See
 [`docs/DESIGN.md`](./docs/DESIGN.md) for scope and non-goals.
+
+## Quickstart
+
+### 1. Clone & Install
+
+```bash
+git clone https://github.com/timezlab/dbx-agent-chat-ui.git
+cd dbx-agent-chat-ui/frontend
+pnpm install
+```
+
+### 2. Environment Setup
+
+Create a `.env` file in the `frontend/` directory. For local development with the included mock API, configure the endpoint as follows:
+
+```env
+# Point to the local mock-api script
+NEXT_PUBLIC_CHAT_ENDPOINT_URL=http://localhost:3001/api/chat
+```
+
+> **Note**: See `frontend/src/env.ts` for a full list of optional configurations, including history (`NEXT_PUBLIC_HISTORY_API_URL`), feedback, and agent selector endpoints.
+
+### 3. Run Locally
+
+You will need to run the dev server and the mock API concurrently in two terminals.
+
+**Terminal 1 (Mock API):**
+```bash
+cd frontend
+pnpm mock:api
+```
+
+**Terminal 2 (Next.js):**
+```bash
+cd frontend
+pnpm dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### 4. Build
+
+To create a static production build (which does not require a Node.js server runtime):
+
+```bash
+cd frontend
+pnpm build
+```
+
+The compiled output will be generated in `frontend/out-manual/` or `frontend/out-embed/` depending on your build target, ready to be served statically or embedded in Databricks.

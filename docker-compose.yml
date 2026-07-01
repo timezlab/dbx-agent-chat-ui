@@ -17,11 +17,28 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    env_file:
+      - frontend/.env
     environment:
-      # Non-secret endpoint selection only — these are the sole knobs that reach
-      # the browser bundle. Leave unset to use the app defaults (mock transport).
-      NEXT_PUBLIC_TRANSPORT_MODE: ${NEXT_PUBLIC_TRANSPORT_MODE:-mock}
-      NEXT_PUBLIC_CHAT_ENDPOINT_URL: ${NEXT_PUBLIC_CHAT_ENDPOINT_URL:-}
+      # Non-secret endpoint selection only — these are the sole knobs that reach the
+      # browser bundle. There are no transport "modes": the UI always streams from the
+      # single Databricks-Playground-format endpoint below. Default = the same-origin
+      # dev mock route `/api/chat` (served by `next dev` in this container; streams a
+      # recorded response with zero Databricks access). Override with a real agent/proxy
+      # URL for a live backend; set to empty for the "no endpoint" inline notice.
+      # (Empty strings are coerced to undefined in src/env.ts.)
+      # Trailing slash matches `trailingSlash: true` (avoids a 308 redirect on POST).
+      NEXT_PUBLIC_CHAT_ENDPOINT_URL: ${NEXT_PUBLIC_CHAT_ENDPOINT_URL:-/api/chat/}
+      # Optional host-provided REST endpoints (all independent; unset ⇒ local fallback).
+      NEXT_PUBLIC_HISTORY_API_URL: ${NEXT_PUBLIC_HISTORY_API_URL:-}
+      NEXT_PUBLIC_FEEDBACK_API_URL: ${NEXT_PUBLIC_FEEDBACK_API_URL:-}
+      NEXT_PUBLIC_AGENTS_API_URL: ${NEXT_PUBLIC_AGENTS_API_URL:-}
+      # Empty-state sample prompts: a JSON array of strings, e.g.
+      # '["Summarize this doc","Write a SQL query"]'. Unset/malformed ⇒ no samples.
+      NEXT_PUBLIC_SAMPLE_PROMPTS: ${NEXT_PUBLIC_SAMPLE_PROMPTS:-}
+      # Show the composer's attach/upload button ("1"/"true"/"yes" ⇒ on). Default off;
+      # upload is still deferred (the button is a no-op affordance when on).
+      NEXT_PUBLIC_ENABLE_UPLOAD: ${NEXT_PUBLIC_ENABLE_UPLOAD:-}
     restart: unless-stopped
     networks:
       - timezlab_network

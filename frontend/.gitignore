@@ -13,8 +13,10 @@
 # testing
 /coverage
 
-# local SSE playback recordings (raw agent stream captures — not committed)
-/sse-recordings/
+# local SSE playback recordings (raw agent stream captures — not committed).
+# The small sample `default.txt` IS committed; larger real captures are local-only.
+/public/recordings/*
+!/public/recordings/default.txt
 
 # next.js
 /.next/
@@ -35,6 +37,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# …but the non-secret template IS tracked as the config reference (docs-as-code).
+!.env.example
 
 # vercel
 .vercel

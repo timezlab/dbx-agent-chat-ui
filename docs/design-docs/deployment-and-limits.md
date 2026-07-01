@@ -65,14 +65,8 @@ Build scripts:
 {
   "scripts": {
     "dev": "next dev",
-    "build": "pnpm build:next && pnpm verify:databricks-output",
-    "build:next": "next build",
-    "build:static": "pnpm build",
-    "build:embed": "vite build --config vite.embed.config.ts && pnpm verify:manual-output",
-    "verify:databricks-output": "node scripts/verify-databricks-output.mjs",
-    "verify:manual-output": "node scripts/verify-manual-output.mjs",
-    "pack:static": "pnpm build && node scripts/pack-static-output.mjs",
-    "pack:embed": "pnpm build:embed",
+    "build:manual": "next build && rm -rf out-manual && mv out out-manual && node scripts/verify-manual-output.mjs",
+    "build:embed": "vite build --config vite.embed.config.ts && node scripts/verify-embed-output.mjs",
     "lint": "eslint",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
@@ -97,15 +91,15 @@ pnpm build
 pnpm pack:static
 ```
 
-Sync exclusions: `node_modules/`, `.next/`, `out/`, `.env`, coverage/test artifacts,
+Sync exclusions: `node_modules/`, `.next/`, `out-manual/`, `out-embed/`, `.env`, coverage/test artifacts,
 screenshots/videos, archives, large data files.
 
 Manual-copy artifacts:
 
 | Command | Output | Use case |
 | --- | --- | --- |
-| `pnpm pack:static` | `release/dbx-agent-chat-ui-static.zip` | One-file upload when a proxy/static host can unzip and serve the full Next `out/` tree. |
-| `pnpm pack:embed` | `manual/index.html` (or `index.html` + `app.css` + `app.js`) | Minimal-file artifact for constrained notebook/proxy hosting. |
+| `pnpm build:manual` | `manual.zip` | One-file upload when a proxy/static host can unzip and serve the full Next `out/` tree. |
+| `pnpm build:embed` | `embed.html` | Minimal-file artifact for constrained notebook/proxy hosting. |
 
 The embed output must reuse shared chat UI modules but avoid Next-specific runtime
 assumptions. It is a constrained fallback, not the main static-export path.

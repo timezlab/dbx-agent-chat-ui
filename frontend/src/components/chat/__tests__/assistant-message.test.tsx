@@ -1,0 +1,81 @@
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+
+import type { Message } from "@/entities";
+import { AssistantMessage } from "@/components/chat/assistant-message";
+
+function assistant(over: Partial<Message> = {}): Message {
+  return {
+    id: "a",
+    role: "assistant",
+    parts: [],
+    status: "complete",
+    error: null,
+    feedback: null,
+    createdAt: 0,
+    ...over,
+  };
+}
+
+describe("AssistantMessage rendering (US3)", () => {
+  it("folds a tools part into a collapsed activity group summarizing the last step", () => {
+    const message = assistant({
+      parts: [
+        {
+          type: "tools",
+          items: [
+            {
+              id: "call_1",
+              name: "read_file",
+              args: { file_path: "a.ts" },
+              detail: null,
+              status: "done",
+            },
+          ],
+        },
+      ],
+    });
+    render(<AssistantMessage message={message} />);
+    // A settled turn folds its activity into ONE collapsed "process" dropdown; the
+    // header summarizes the last step (verb + primary arg), the body stays collapsed.
+    expect(
+      document.querySelector('[data-slot="activity-group"]'),
+    ).not.toBeNull();
+    expect(screen.getByText("Read")).toBeInTheDocument();
+    expect(screen.getByText("a.ts")).toBeInTheDocument();
+  });
+
+  it("renders an inline error below partial output", () => {
+    const message = assistant({
+      status: "error",
+      error: "upstream failed",
+      parts: [{ type: "text", text: "partial" }],
+    });
+    render(<AssistantMessage message={message} />);
+    expect(screen.getByRole("alert").textContent).toMatch(/upstream failed/);
+  });
+
+  it("shows the feedback panel only on a settled turn with content", () => {
+    const onFeedback = vi.fn();
+    const streaming = assistant({
+      status: "streaming",
+      parts: [{ type: "text", text: "typing" }],
+    });
+    const { rerender } = render(
+      <AssistantMessage message={streaming} onFeedback={onFeedback} />,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Good response" }),
+    ).toBeNull();
+
+    rerender(
+      <AssistantMessage
+        message={assistant({ parts: [{ type: "text", text: "done" }] })}
+        onFeedback={onFeedback}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Good response" }),
+    ).toBeInTheDocument();
+  });
+});

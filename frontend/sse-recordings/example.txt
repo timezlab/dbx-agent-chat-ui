@@ -1,0 +1,14 @@
+event: message
+data: {"choices":[{"delta":{"role":"assistant"}}]}
+
+event: message
+data: {"choices":[{"delta":{"content":"Hello"}}]}
+
+event: message
+data: {"choices":[{"delta":{"content":", world"}}]}
+
+event: message
+data: {"choices":[{"delta":{"content":"!"}}]}
+
+event: message
+data: [DONE]

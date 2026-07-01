@@ -1,30 +1,49 @@
 #!/usr/bin/env node
-// Verify that the embed build produced the expected output files in manual/.
+// Fail the build if any file in out/ exceeds the Databricks Apps per-file hard limit (10 MB).
+// We use 9.5 MB as a safe margin to catch issues before deployment.
 
-import { access } from "node:fs/promises";
-import { constants } from "node:fs";
+import { readdir, stat } from "node:fs/promises";
+import { join, relative } from "node:path";
 
-const MANUAL_DIR = "manual";
-const REQUIRED_FILES = ["index.html"];
+const OUT_DIR = "out-manual";
+const LIMIT_BYTES = 9.5 * 1024 * 1024;
 
-const missing = [];
+async function walk(dir) {
+  const entries = await readdir(dir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await walk(full)));
+    } else {
+      files.push(full);
+    }
+  }
+  return files;
+}
 
-for (const file of REQUIRED_FILES) {
-  try {
-    await access(`${MANUAL_DIR}/${file}`, constants.R_OK);
-  } catch {
-    missing.push(file);
+const files = await walk(OUT_DIR);
+const violations = [];
+
+for (const file of files) {
+  const { size } = await stat(file);
+  if (size > LIMIT_BYTES) {
+    violations.push({ file: relative(OUT_DIR, file), size });
   }
 }
 
-if (missing.length > 0) {
+if (violations.length > 0) {
   console.error(
-    `\n❌ Embed output check FAILED — missing file(s) in ${MANUAL_DIR}/:\n`
+    `\n❌ Manual output check FAILED — ${violations.length} file(s) exceed 9.5 MB:\n`
   );
-  for (const file of missing) {
-    console.error(`   ${file}`);
+  for (const { file, size } of violations) {
+    const mb = (size / 1024 / 1024).toFixed(2);
+    console.error(`   ${file}  (${mb} MB)`);
   }
+  console.error(
+    "\nEnsure bundled files are reasonably sized for static hosting.\n"
+  );
   process.exit(1);
 }
 
-console.log(`✅ Embed output check passed — required files present in ${MANUAL_DIR}/.`);
+console.log(`✅ Manual output check passed — ${files.length} files, all under 9.5 MB.`);
