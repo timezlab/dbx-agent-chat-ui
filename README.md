@@ -41,22 +41,15 @@ Create a `.env` file in the `frontend/` directory. For local development with th
 
 ```env
 # Point to the local mock-api script
-NEXT_PUBLIC_CHAT_ENDPOINT_URL=http://localhost:3001/api/chat
+NEXT_PUBLIC_CHAT_ENDPOINT_URL=http://localhost:3000/api/chat
 ```
 
 > **Note**: See `frontend/src/env.ts` for a full list of optional configurations, including history (`NEXT_PUBLIC_HISTORY_API_URL`), feedback, and agent selector endpoints.
 
 ### 3. Run Locally
 
-You will need to run the dev server and the mock API concurrently in two terminals.
+The local development environment includes an integrated Mock API route. You only need one terminal:
 
-**Terminal 1 (Mock API):**
-```bash
-cd frontend
-pnpm mock:api
-```
-
-**Terminal 2 (Next.js):**
 ```bash
 cd frontend
 pnpm dev
@@ -66,11 +59,13 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### 4. Build
 
-To create a static production build (which does not require a Node.js server runtime):
+To create a static production build (which does not require a Node.js server runtime), run the appropriate build script:
 
 ```bash
 cd frontend
-pnpm build
+pnpm build:manual  # For manual ZIP deployment
+# OR
+pnpm build:embed   # For Databricks HTML embed
 ```
 
-The compiled output will be generated in `frontend/out-manual/` or `frontend/out-embed/` depending on your build target, ready to be served statically or embedded in Databricks.
+The compiled output will be packaged in the repository root as `manual.zip` or `embed.html` depending on your build target, ready to be served statically or embedded in Databricks.

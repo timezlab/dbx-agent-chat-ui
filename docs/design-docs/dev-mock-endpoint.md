@@ -42,8 +42,7 @@ Keep a mock route, but make it **dev-only and invisible to the static build**:
    `NEXT_PUBLIC_CHAT_ENDPOINT_URL=/api/chat` (trailing slash matches `trailingSlash:
    true`, avoiding a 308 on POST).
 
-The standalone `scripts/mock-api.mjs` (a separate HTTP server) still exists for setups
-that point the endpoint at an **external** URL instead of this same-origin route.
+The standalone `scripts/mock-api.mjs` (a separate HTTP server) was removed. All mock scenarios now use the internal Next route, simplifying the dev environment to a single terminal.
 
 ## Alternatives considered
 

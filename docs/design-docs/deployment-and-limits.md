@@ -65,8 +65,8 @@ Build scripts:
 {
   "scripts": {
     "dev": "next dev",
-    "build:manual": "next build && rm -rf out-manual && mv out out-manual && node scripts/verify-manual-output.mjs",
-    "build:embed": "vite build --config vite.embed.config.ts && node scripts/verify-embed-output.mjs",
+    "build:manual": "node scripts/gen-replay-recording.mjs && next build && rm -rf out-manual && mv out out-manual && node scripts/verify-manual-output.mjs && cd out-manual && python3 -m zipfile -c ../../manual.zip * && cd .. && rm -rf out-manual",
+    "build:embed": "node scripts/gen-replay-recording.mjs && vite build --config vite.embed.config.ts && node scripts/verify-embed-output.mjs && cp out-embed/index.html ../embed.html && rm -rf out-embed",
     "lint": "eslint",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"
@@ -91,7 +91,7 @@ pnpm build
 pnpm pack:static
 ```
 
-Sync exclusions: `node_modules/`, `.next/`, `out-manual/`, `out-embed/`, `.env`, coverage/test artifacts,
+Sync exclusions: `node_modules/`, `.next/`, `manual.zip`, `embed.html`, `.env`, coverage/test artifacts,
 screenshots/videos, archives, large data files.
 
 Manual-copy artifacts:
