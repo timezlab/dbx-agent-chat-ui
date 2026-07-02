@@ -51,6 +51,9 @@ export function streamSSE(options: StreamSSEOptions): AbortController {
   const controller = new AbortController();
   const parser = createResponsesParser();
 
+  let retryCount = 0;
+  const maxRetries = 3;
+
   let closed = false;
   const close = (reason: "done" | "error" | "abort") => {
     if (closed) return;
@@ -109,19 +112,29 @@ export function streamSSE(options: StreamSSEOptions): AbortController {
       }
     },
     onclose() {
-      close("done"); // server closed the stream without an explicit terminal
+      // Không gọi close("done") để fetch-event-source tự động chờ và reconnect
+      // nếu server (FastAPI proxy) chủ động ngắt connection trước timeout 10 phút.
+      console.log("Server closed stream. Awaiting auto-reconnect...");
     },
     onerror(err) {
       if (controller.signal.aborted) {
         close("abort");
-      } else {
+        throw err;
+      }
+      
+      if (retryCount >= maxRetries) {
         handlers.onEvent({
           type: "error",
-          message: err instanceof Error ? err.message : "Stream error",
+          message: err instanceof Error ? err.message : "Stream error (max retries reached)",
         });
         close("error");
+        throw err;
       }
-      throw err; // stop fetch-event-source auto-retry (chat streams are single-shot)
+
+      retryCount++;
+      console.warn(`Stream error, attempting to reconnect (${retryCount}/${maxRetries})...`, err);
+      // Trả về số milisecond để retry (ví dụ: 2000ms)
+      return 2000;
     },
   }).catch(() => {
     // Rejection already surfaced via onerror/abort; ensure we always close.
