@@ -240,6 +240,27 @@ interleaved `Message.parts[]` model is unchanged; this is render-layer only.
   reducer tests green, static build has no `out/api`; re-run the T056 customization-contract audit
   over the new `components/shell/*` + `components/chat/*`; confirm a11y (focus ring, `aria-label`s,
   reduced-motion respected) and light/dark parity.
+- [X] T068 Single-font migration: drop Geist entirely — `layout.tsx` now loads only
+  `Inter({ variable: "--font-sans" })`; `globals.css` `--font-mono` is the platform monospace
+  stack (no second webfont). Supersedes T058's "keep Geist sans + mono" (superseded 2026-07-02,
+  see Notes).
+- [X] T069 Empty-state redesign (`frontend/src/components/chat/chat-empty.tsx`): centered greeting
+  + `NEXT_PUBLIC_SAMPLE_PROMPTS`-driven grid of starter cards (default icon + prompt text, click
+  sends immediately); no samples ⇒ greeting only. New config fields `samplePrompts`/`uploadEnabled`
+  on `CapabilityConfig` (both `.optional()`, defaulted at the consumption site) plus
+  `NEXT_PUBLIC_SAMPLE_PROMPTS`/`NEXT_PUBLIC_ENABLE_UPLOAD` in `env.ts`, parsed via
+  `parseSamplePrompts`/`parseUploadEnabled` in `lib/config.ts` (malformed ⇒ safe default, never
+  throws). Tests: `lib/__tests__/config.test.ts`, `components/chat/__tests__/chat-empty.test.tsx`.
+- [X] T070 Composer toolbar relocation: moved the **US5 agent selector** (T047) from the
+  `nav-settings.tsx` dropdown (T066) into a toolbar row under the textarea in
+  `chat-composer.tsx`, alongside a new upload/attach button gated by `NEXT_PUBLIC_ENABLE_UPLOAD`
+  (default off; dimmed + disabled with a tooltip when off — upload itself stays deferred, D-014).
+  The dropdown always renders (placeholder "Agent" item when `agentsAvailable` is false); the
+  toolbar's local `TooltipProvider` makes `ChatComposer` renderable standalone, not dependent on
+  an ancestor `AppShell` (customization contract). Supersedes T066's "surfaced here [nav-settings]
+  instead of a bare header control" (superseded 2026-07-02, see Notes). Tests:
+  `hooks/agents/__tests__/use-agents.test.ts`, `hooks/chat/__tests__/use-chat.agent.test.ts`,
+  new cases in `components/chat/__tests__/chat-composer.test.tsx`.
 
 ---
 
@@ -313,3 +334,18 @@ Add US2 → US4 → US3 → US5, each tested independently and deployable, witho
 - Post-`/speckit-analyze` additions: **T055** (US1 — missing-config non-crash notice, closes edge-case gap U1) and **T056** (Polish — customization-contract audit, closes Principle V/FR-016 gap C1); plus the Component convention callout after the Format legend.
 - **Interleaved timeline (`Message.parts[]`)**: after the multi-burst-text review (real capture streams text 3× around 24 tool calls under one `item_id`), `Message` moved from `content: string` + `tools[]` to an ordered `parts[]` (`text` / `tools`). Reducer builds parts from event order (no `item_id` on `ChatStreamEvent`); empty text parts dropped on `done`. Touches T009/T013 (US1 text parts), T034/T036 (US3 tool parts + interleave), T022/T037/T043 (render in order), and T017 (interleaved sample). See `data-model.md` › MessagePart.
 - **Reasoning / "thinking" channel**: research (`docs/references/databricks-research.md` › Reasoning) confirmed Databricks reasoning is a separate content type (`response.reasoning_text.delta` / `item.type "reasoning"`, or FM-API `content` block `type:"reasoning"`), rendered as a collapsible Thinking block. Added `reasoning` to `ChatStreamEvent` (T005) + contract, a `reasoning` `MessagePart` (`ReasoningPartSchema`), and **T057** (Polish, forward-compatible). The single SSE handler maps `reasoning` for both the live stream and mock-api recordings; the committed recording now includes a leading reasoning burst.
+- **Font/toolbar follow-up (2026-07-02)**: T068 supersedes T058's "keep Geist sans + mono" — the
+  app now ships a single Inter face (`--font-sans`), Geist removed entirely, `--font-mono` is the
+  platform monospace stack. T070 supersedes T066's "[US5 selector] surfaced here [nav-settings]
+  instead of a bare header control" — the selector now lives in the composer toolbar next to the
+  new upload button, matching other AI chat platforms' layout. Non-secret env template committed
+  at `frontend/.env.example`; `docker-compose.yml`'s `web` service reads `env_file: frontend/.env`
+  (gitignored, user-owned) instead of the `environment:` block growing per new var.
+- **Auth research (2026-07-02)**: `docs/references/databricks-auth-user-identity.md` — how to
+  surface the logged-in user in the sidebar across the two "server owns the origin" deploy modes
+  (notebook + cluster driver-proxy; Databricks Apps). Conclusion: the browser bundle can never
+  read platform identity headers or call the workspace REST API directly (CORS-blocked); both
+  modes need a same-origin `GET /api/me`-style endpoint from the hosting backend, following the
+  existing `agentsUrl`-style provider pattern (`historyUrl`/`feedbackUrl`/`agentsUrl` →
+  `userUrl`). Not yet implemented — no `UserProvider` exists in this feature; tracked as future
+  work, not a task here.

@@ -12,9 +12,14 @@ existing [`frontend/src/env.ts`](../../../../frontend/src/env.ts) via
 | `NEXT_PUBLIC_HISTORY_API_URL` | URL string (optional) | unset | Remote conversation history endpoint. Unset ⇒ `localStorage` persistence. |
 | `NEXT_PUBLIC_FEEDBACK_API_URL` | URL string (optional) | unset | Feedback submission endpoint. Unset ⇒ no-op/local mock sink. |
 | `NEXT_PUBLIC_AGENTS_API_URL` | URL string (optional) | unset | Agents list endpoint. Unset ⇒ agent selector hidden. |
+| `NEXT_PUBLIC_SAMPLE_PROMPTS` | JSON array of strings (optional) | unset | Empty-state starter prompts, e.g. `'["Summarize this doc","Write a SQL query"]'`. Malformed/non-array/unset ⇒ `[]` (no sample cards) — never throws. |
+| `NEXT_PUBLIC_ENABLE_UPLOAD` | boolean-ish string (optional) | unset (off) | Shows the composer's attach/upload affordance. `"1"`/`"true"`/`"yes"` (case-insensitive) ⇒ on; anything else ⇒ off. Upload itself stays deferred (D-014) — the button is a no-op affordance when on. |
 
 Each URL is **independent** — any subset may be set (FR-017). Contracts for the three
-providers are in [`providers.md`](./providers.md).
+providers are in [`providers.md`](./providers.md). `NEXT_PUBLIC_SAMPLE_PROMPTS` and
+`NEXT_PUBLIC_ENABLE_UPLOAD` are parsed in [`lib/config.ts`](../../../../frontend/src/lib/config.ts)
+(`parseSamplePrompts`, `parseUploadEnabled`) rather than validated in `env.ts`, so a
+malformed value degrades gracefully instead of failing env parsing at boot.
 
 ### Rules
 
