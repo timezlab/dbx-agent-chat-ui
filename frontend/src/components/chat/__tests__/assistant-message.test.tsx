@@ -9,6 +9,7 @@ function assistant(over: Partial<Message> = {}): Message {
     id: "a",
     role: "assistant",
     parts: [],
+    attachments: [],
     status: "complete",
     error: null,
     feedback: null,
@@ -43,6 +44,29 @@ describe("AssistantMessage rendering (US3)", () => {
     ).not.toBeNull();
     expect(screen.getByText("Read")).toBeInTheDocument();
     expect(screen.getByText("a.ts")).toBeInTheDocument();
+  });
+
+  it("resolves reference-style links and renders base64 images in a settled turn", () => {
+    const message = assistant({
+      parts: [
+        {
+          type: "text",
+          text:
+            "See [[1] doc.md][w1] for detail.\n\n" +
+            "![chart](data:image/png;base64,iVBORw0KGgo=)\n\n" +
+            "[w1]: https://example.com/doc.md",
+        },
+      ],
+    });
+    render(<AssistantMessage message={message} />);
+    // Reference resolved to a link (streamdown renders links as buttons), not raw source.
+    expect(document.body.innerHTML).not.toContain("][w1]");
+    expect(document.body.innerHTML).not.toContain("[w1]:");
+    expect(document.querySelector('[data-streamdown="link"]')).not.toBeNull();
+    // Base64 image rendered by us (Streamdown blocks data: URIs) as a real <img>.
+    const img = document.querySelector('img[data-slot="assistant-image"]');
+    expect(img).not.toBeNull();
+    expect(img?.getAttribute("src")).toContain("data:image/png;base64,");
   });
 
   it("renders an inline error below partial output", () => {

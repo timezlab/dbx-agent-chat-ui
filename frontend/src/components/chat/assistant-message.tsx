@@ -6,6 +6,7 @@ import type { Feedback, Message } from "@/entities";
 import { cn } from "@/lib/utils";
 import { groupMessageParts } from "@/lib/chat/message-parts";
 import { resolveReferenceLinks } from "@/lib/markdown/reference-links";
+import { splitDataImages } from "@/lib/markdown/data-images";
 import {
   Message as MessageRow,
   MessageAvatar,
@@ -80,17 +81,41 @@ export function AssistantMessage({
       <MessageContent>
         {segments.map((segment, i) => {
           if (segment.kind === "text") {
+            // Base64 images an agent streams are rendered by us (see renderTextSegment) —
+            // Streamdown blocks `data:` image URIs and offers no opt-in prop.
+            const blocks = splitDataImages(resolveReferenceLinks(segment.part.text));
+            const lastMd = blocks.map((b) => b.type).lastIndexOf("md");
             return (
-              <Streamdown
-                key={`t${segment.index}`}
-                data-slot="assistant-markdown"
-                shikiTheme={SHIKI_THEME}
-                linkSafety={LINK_SAFETY}
-                isAnimating={streaming && i === lastSegment}
-                className="min-w-0 animate-in fade-in-0 slide-in-from-bottom-1 text-sm leading-relaxed duration-300 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-              >
-                {resolveReferenceLinks(segment.part.text)}
-              </Streamdown>
+              <React.Fragment key={`t${segment.index}`}>
+                {blocks.map((block, bi) =>
+                  block.type === "image" ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={`t${segment.index}-${bi}`}
+                      data-slot="assistant-image"
+                      src={block.src}
+                      alt={block.alt}
+                      className="my-4 max-w-full rounded-lg border border-foreground/10"
+                    />
+                  ) : block.text.trim().length === 0 ? null : (
+                    <Streamdown
+                      // Remount once streaming settles: Streamdown caches parsed blocks
+                      // across incremental frames, and resolveReferenceLinks rewrites block
+                      // structure late in the stream (strips `[x]: url` definitions, inlines
+                      // the links) — leaving stale blocks that still show raw `[text][ref]`.
+                      // Flipping the key on settle forces a clean re-parse (matches reload).
+                      key={`t${segment.index}-${bi}-${streaming ? "live" : "final"}`}
+                      data-slot="assistant-markdown"
+                      shikiTheme={SHIKI_THEME}
+                      linkSafety={LINK_SAFETY}
+                      isAnimating={streaming && i === lastSegment && bi === lastMd}
+                      className="min-w-0 animate-in fade-in-0 slide-in-from-bottom-1 text-sm leading-relaxed duration-300 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                    >
+                      {block.text}
+                    </Streamdown>
+                  ),
+                )}
+              </React.Fragment>
             );
           }
           // An activity group is "active" (open + live) only while it is the

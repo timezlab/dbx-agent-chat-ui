@@ -261,6 +261,30 @@ interleaved `Message.parts[]` model is unchanged; this is render-layer only.
   instead of a bare header control" (superseded 2026-07-02, see Notes). Tests:
   `hooks/agents/__tests__/use-agents.test.ts`, `hooks/chat/__tests__/use-chat.agent.test.ts`,
   new cases in `components/chat/__tests__/chat-composer.test.tsx`.
+- [X] T071 File/image attachment (supersedes D-014's upload deferral and T070's "upload
+  itself stays deferred" note, superseded 2026-07-02, see Notes): the composer's attach
+  button reads picked files client-side (`FileReader` → base64 data URL, no backend)
+  into a new `Attachment` entity (`id`, `name`, `mimeType`, `size`, `dataUrl`) — one
+  uniform shape for every file type, no per-vendor branching (kept simple per explicit
+  scope direction, rather than the vendor-specific `image_url`/`document` shaping
+  researched in `docs/references/databricks-research.md`). `Message.attachments` (always
+  an array, mirrors `parts`) renders as removable preview chips in the composer
+  (`chat-composer.tsx`) and filename+size chips in the sent bubble (`user-message.tsx`)
+  — no thumbnails, no client-side content parsing. `ChatRequestMessage.attachments`
+  (`.optional()`) carries them to the transport **only on the turn being dispatched** —
+  replayed history (and other still-queued turns) never re-attach prior files, bounding
+  payload growth per send (`use-chat.ts` `send`/`handleClose`). `NEXT_PUBLIC_UPLOAD_ACCEPT`
+  (default `image/*`) and `NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB` (default 10 MB, i.e.
+  `MAX_ATTACHMENT_SIZE_BYTES`) drive validation in `lib/chat/attachments.ts`
+  (`validateAttachment`/`matchesAccept`). Attachments are session-only:
+  `lib/history/local.ts` strips each `dataUrl` before persisting to `localStorage` (chips
+  still render from name/size after reload; file bytes do not survive it). `Conversation.queue`
+  moved from `string[]` to `QueuedMessage[]` (`{text, attachments}`) so a message queued
+  behind an active generation keeps its attachments. Tests:
+  `lib/chat/__tests__/attachments.test.ts`, `lib/chat/__tests__/queue.test.ts`,
+  `lib/history/__tests__/local.test.ts`, `lib/__tests__/config.test.ts`, new cases in
+  `components/chat/__tests__/chat-composer.test.tsx`,
+  `components/chat/__tests__/user-message.test.tsx` (new file).
 
 ---
 
@@ -349,3 +373,42 @@ Add US2 → US4 → US3 → US5, each tested independently and deployable, witho
   existing `agentsUrl`-style provider pattern (`historyUrl`/`feedbackUrl`/`agentsUrl` →
   `userUrl`). Not yet implemented — no `UserProvider` exists in this feature; tracked as future
   work, not a task here.
+- **File/image attachment (2026-07-02)**: initial design explored a Databricks
+  Playground/Model-Serving-specific wire shape (`image_url`/`document` `ContentItem`
+  mapping per adapter, generic pass-through only for custom App/proxy backends) — see
+  `docs/references/databricks-research.md`. User direction (`tiếp theo upload đơn giản
+  không cần feat riêng`) was to keep this addition simple and fold it into 001 rather
+  than open a new Spec Kit feature folder: one uniform `Attachment` shape for every
+  backend/file type (T071), no per-vendor branching in the UI/entities layer. If a
+  strict Databricks Chat Completions `image_url`/`document` adapter is ever built, it
+  can re-shape `ChatRequestMessage.attachments` at the transport boundary without
+  touching entities or components — the door researched in `databricks-research.md`
+  stays open, just not built now.
+- **Queue/messages decoupling (2026-07-02, part of T071)**: `Conversation.queue` now
+  holds still-waiting sends *independently* of `messages`, which contains only turns
+  already dispatched to the backend (`QueuedMessage` gained an `id` for stable render
+  keys). Pending "queued" bubbles are a derived render view in `useChat`
+  (`messages + queue.map(toPending)`), not stored in `conversation.messages`. This
+  fixed a real leak: `handleClose` previously built dispatch history from all of
+  `messages` — including later still-queued turns — so a queued turn's text leaked into
+  an earlier turn's request and was then sent again as its own turn. Removing the
+  `dispatchedFound`/"promote first queued" logic; history is now `real messages + the
+  one dequeued turn`. `queue` is transient and never persisted — `lib/history/local.ts`
+  drops it to `[]` on save (outright, not relying on the drain-before-idle invariant).
+- **Assistant markdown: base64 images + reference-link streaming fix (2026-07-02)**:
+  Streamdown (`rehype-harden`) hard-blocks `data:` image URIs and exposes no opt-in prop
+  (verified by rendering probes — `allowedImagePrefixes`/`allowDataImages` are ignored in
+  2.5). So an agent-streamed inline base64 image (e.g. a chart, as in the
+  `rbg-performance-2026` recording) rendered as "[Image blocked]". Fix: render those
+  images OURSELVES, outside Streamdown — `lib/markdown/data-images.ts` (`splitDataImages`)
+  splits the text at each `![alt](data:image/…)`; `assistant-message.tsx` hands the
+  surrounding markdown to Streamdown and draws each image with a plain `<img>`. Scope
+  limited to `data:image/…` (passive via `<img>`, no script), so Streamdown's block is
+  not globally relaxed. Separately, reference-style links (`[text][ref]` + a trailing
+  `[ref]: url` definition, resolved to inline links by `lib/markdown/reference-links.ts`)
+  rendered as raw source right after streaming and only corrected on reload: Streamdown
+  caches parsed blocks across incremental frames, and the definition-stripping rewrites
+  block structure late in the stream, leaving stale blocks. Fix: the Streamdown `key`
+  includes the streaming state, forcing a clean re-parse when a turn settles (matches the
+  fresh-mount / reload render, which was already correct). Charts in the demo recording
+  are PNGs drawn with Pillow (matplotlib unavailable), base64-embedded.

@@ -64,6 +64,15 @@ rendering:
 - Tool calls and traces as structured UI, not raw markdown when possible.
 - SQL as a dedicated block with copy/download actions.
 - Sources/citations as separate cards or inline reference chips.
+- **Reference-style links** (`[text][ref]` + trailing `[ref]: url`) are resolved to
+  inline links *before* Streamdown (`lib/markdown/reference-links.ts`), since Streamdown
+  parses block-by-block and can't see a definition in another block. The Streamdown
+  `key` also flips on stream-settle so the late structural rewrite re-parses cleanly
+  (Streamdown caches blocks across streaming frames).
+- **Inline base64 images** (`data:image/…`) are rendered by us with a plain `<img>`
+  *outside* Streamdown (`lib/markdown/data-images.ts`): Streamdown/`rehype-harden`
+  hard-blocks `data:` URIs with no opt-in prop. Scope-limited to `data:image/…` (passive
+  via `<img>`), so the block stays in force for everything else.
 
 ## Alternatives considered
 
