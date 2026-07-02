@@ -22,6 +22,11 @@
 /.next/
 /out/
 
+# transient build dirs — build:manual/build:embed `rm -rf` these after
+# emitting their deliverables (../manual.zip and ../embed.html). Never track.
+/out-manual/
+/out-embed/
+
 # production
 /build
 
