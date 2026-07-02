@@ -4,12 +4,8 @@ import { viteSingleFile } from "vite-plugin-singlefile";
 import { resolve } from "node:path";
 import fs from "node:fs";
 
-// Embed build — produces a self-contained static artifact in manual/.
-// Used for constrained notebook/proxy hosts that can only serve a small number of files.
+// Docs build — produces a self-contained static artifact in the repo root as index.html
 export default defineConfig(({ mode }) => {
-  // Load `NEXT_PUBLIC_*` from `frontend/.env` (this dir) — same file `next dev`/docker
-  // read (env_file: frontend/.env). Was `resolve(__dirname, "..")` (repo root), which has
-  // no .env, so the endpoint was never baked and the embed showed "not configured".
   const env = loadEnv(mode, __dirname, "NEXT_PUBLIC_");
   
   const processEnvDefines: Record<string, string> = {};
@@ -38,7 +34,7 @@ export default defineConfig(({ mode }) => {
         "@": resolve(__dirname, "src"),
       },
     },
-    root: "embed",
+    root: "docs-build",
     base: "./",
     define: processEnvDefines,
     css: {
@@ -50,7 +46,7 @@ export default defineConfig(({ mode }) => {
       sourcemap: false,
       assetsInlineLimit: Number.MAX_SAFE_INTEGER,
       rollupOptions: {
-        input: resolve(__dirname, "embed/embed.html"),
+        input: resolve(__dirname, "docs-build/index.html"),
       },
     },
   };

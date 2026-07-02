@@ -4,8 +4,8 @@
 import { access } from "node:fs/promises";
 import { constants } from "node:fs";
 
-const EMBED_DIR = "out-embed";
-const REQUIRED_FILES = ["index.html"];
+const EMBED_DIR = "..";
+const REQUIRED_FILES = ["embed.html"];
 
 const missing = [];
 
