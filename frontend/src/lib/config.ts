@@ -17,6 +17,8 @@ export function resolveConfig(): CapabilityConfig {
     uploadAccept: parseUploadAccept(env.NEXT_PUBLIC_UPLOAD_ACCEPT),
     uploadMaxSizeBytes: parseUploadMaxSizeMb(env.NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB),
     devToolsEnabled: parseDevToolsEnabled(env.NEXT_PUBLIC_DEV_TOOLS),
+    docsUrl: resolveDeploymentUrl(env.NEXT_PUBLIC_DOCS_URL),
+    welcomeUrl: resolveDeploymentUrl(env.NEXT_PUBLIC_WELCOME_URL),
   });
 }
 

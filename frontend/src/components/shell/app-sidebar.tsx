@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquareIcon, PlusIcon } from "lucide-react";
+import { MessageSquareIcon, PlusIcon, BookIcon } from "lucide-react";
 import { Logo } from "@/components/logo";
 
 import type { CapabilityConfig, Conversation } from "@/entities";
@@ -76,6 +76,17 @@ export function AppSidebar({ config }: AppSidebarProps) {
                 <span>New chat</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
+
+            {config.welcomeUrl ? (
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Welcome">
+                  <a href={config.welcomeUrl}>
+                    <BookIcon />
+                    <span>Welcome</span>
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ) : null}
           </SidebarMenu>
         </SidebarGroup>
 
@@ -101,6 +112,16 @@ export function AppSidebar({ config }: AppSidebarProps) {
           {config.devToolsEnabled ? (
             <SidebarMenuItem>
               <NavDevTools />
+            </SidebarMenuItem>
+          ) : null}
+          {config.docsUrl ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Documentation">
+                <a href={config.docsUrl} target="_blank" rel="noopener noreferrer">
+                  <BookIcon />
+                  <span>Documentation</span>
+                </a>
+              </SidebarMenuButton>
             </SidebarMenuItem>
           ) : null}
           <SidebarMenuItem>

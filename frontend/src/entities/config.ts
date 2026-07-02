@@ -28,5 +28,9 @@ export const CapabilityConfigSchema = z.object({
   // false (ẩn hoàn toàn). Non-secret selector (Principle II); parse tại
   // lib/config.ts#parseDevToolsEnabled.
   devToolsEnabled: z.boolean().optional(),
+  // NEXT_PUBLIC_DOCS_URL — URL cho tài liệu. Optional; unset ⇒ ẩn icon Docs ở sidebar.
+  docsUrl: z.string().optional(),
+  // NEXT_PUBLIC_WELCOME_URL — URL cho trang giới thiệu. Optional; unset ⇒ ẩn icon Welcome ở sidebar.
+  welcomeUrl: z.string().optional(),
 });
 export type CapabilityConfig = z.infer<typeof CapabilityConfigSchema>;
