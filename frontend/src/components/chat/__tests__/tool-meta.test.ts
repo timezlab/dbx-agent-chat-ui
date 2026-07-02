@@ -42,6 +42,34 @@ describe("toolDisplay", () => {
     });
   });
 
+  it("presents a read_file under /skills/ as a Skill; SKILL.md shows just the name", () => {
+    // Reading a skill's own SKILL.md IS activating it → name only, no file.
+    expect(
+      toolDisplay(tool({ name: "read_file", args: { file_path: "/skills/report-builder/SKILL.md" } })),
+    ).toMatchObject({ title: "Skill", subtitle: "report-builder" });
+    // A supporting asset shows the skill name + the file basename (not the nested dir).
+    expect(
+      toolDisplay(
+        tool({ name: "read_file", args: { file_path: "/skills/report-builder/assets/layout-css.md" } }),
+      ).subtitle,
+    ).toBe("report-builder - layout-css.md");
+  });
+
+  it("shows just the skill name when a /skills/ path has no file segment", () => {
+    expect(
+      toolDisplay(tool({ name: "read_file", args: { file_path: "/skills/financial-analysis" } })).subtitle,
+    ).toBe("financial-analysis");
+    expect(
+      toolDisplay(tool({ name: "read_file", args: { file_path: "/skills/financial-analysis/" } })).subtitle,
+    ).toBe("financial-analysis");
+  });
+
+  it("keeps a normal (non-/skills/) read_file as a plain Read of the path", () => {
+    expect(
+      toolDisplay(tool({ name: "read_file", args: { file_path: "/repo/skills.ts" } })),
+    ).toMatchObject({ title: "Read", subtitle: "/repo/skills.ts" });
+  });
+
   it("falls back to the raw name + detail for custom tools", () => {
     const item = tool({ name: "weird_tool", args: { a: 1 }, detail: "some detail" });
     expect(toolDisplay(item)).toMatchObject({
