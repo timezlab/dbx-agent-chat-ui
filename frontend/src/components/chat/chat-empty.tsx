@@ -34,7 +34,10 @@ export function ChatEmpty({
     <div
       data-slot="chat-empty"
       className={cn(
-        "mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col items-center justify-center gap-6 px-4 py-8 text-center",
+        // Just the centered content — the scroll region is owned by the parent slot in
+        // chat-screen (so `my-auto` centers when it fits and the parent scrolls, top
+        // reachable, when the viewport is short). No `flex-1`/overflow of its own.
+        "mx-auto flex w-full max-w-3xl flex-col items-center gap-6 px-4 py-8 text-center",
         className,
       )}
       {...props}

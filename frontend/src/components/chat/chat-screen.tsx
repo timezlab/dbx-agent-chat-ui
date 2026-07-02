@@ -61,12 +61,21 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
       ) : null}
 
       {empty ? (
-        <ChatEmpty
-          samplePrompts={samplePrompts}
-          onSelectPrompt={send}
-          disabled={configError != null}
-          className="min-h-0 flex-1"
-        />
+        // The empty-state slot owns the scroll (mirrors the MessageList slot): it fills
+        // the space and scrolls when the viewport is short; `my-auto` on ChatEmpty
+        // centers the content when it fits, and collapses so the top stays reachable
+        // when it overflows.
+        <div
+          data-slot="chat-empty-scroll"
+          className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+        >
+          <ChatEmpty
+            samplePrompts={samplePrompts}
+            onSelectPrompt={send}
+            disabled={configError != null}
+            className="my-auto"
+          />
+        </div>
       ) : (
         <MessageList
           messages={messages}
