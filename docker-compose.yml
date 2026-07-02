@@ -17,34 +17,14 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    # `frontend/.env` is the single source of the non-secret `NEXT_PUBLIC_*` knobs
+    # (endpoint selection, sample prompts, upload toggles) — see `frontend/.env.example`
+    # for the full list and defaults. `next dev` reads them at runtime. Do NOT re-declare
+    # them under `environment:`: that block interpolates from the shell / repo-root `.env`
+    # (not this file), so an unset var there resolves to "" and silently overrides the
+    # value here — which is how the sample prompts went missing.
     env_file:
       - frontend/.env
-    environment:
-      # Non-secret endpoint selection only — these are the sole knobs that reach the
-      # browser bundle. There are no transport "modes": the UI always streams from the
-      # single Databricks-Playground-format endpoint below. Default = the same-origin
-      # dev mock route `/api/chat` (served by `next dev` in this container; streams a
-      # recorded response with zero Databricks access). Override with a real agent/proxy
-      # URL for a live backend; set to empty for the "no endpoint" inline notice.
-      # (Empty strings are coerced to undefined in src/env.ts.)
-      # Trailing slash matches `trailingSlash: true` (avoids a 308 redirect on POST).
-      NEXT_PUBLIC_CHAT_ENDPOINT_URL: ${NEXT_PUBLIC_CHAT_ENDPOINT_URL:-/api/chat}
-      # Optional host-provided REST endpoints (all independent; unset ⇒ local fallback).
-      NEXT_PUBLIC_HISTORY_API_URL: ${NEXT_PUBLIC_HISTORY_API_URL:-}
-      NEXT_PUBLIC_FEEDBACK_API_URL: ${NEXT_PUBLIC_FEEDBACK_API_URL:-}
-      NEXT_PUBLIC_AGENTS_API_URL: ${NEXT_PUBLIC_AGENTS_API_URL:-}
-      # Empty-state sample prompts: a JSON array of strings, e.g.
-      # '["Summarize this doc","Write a SQL query"]'. Unset/malformed ⇒ no samples.
-      NEXT_PUBLIC_SAMPLE_PROMPTS: ${NEXT_PUBLIC_SAMPLE_PROMPTS:-}
-      # Show the composer's attach/upload button ("1"/"true"/"yes" ⇒ on). Default off.
-      # Attachments ride along the chat body as base64 (T071); session-only (never
-      # persisted). Tune the picker with the two knobs below.
-      NEXT_PUBLIC_ENABLE_UPLOAD: ${NEXT_PUBLIC_ENABLE_UPLOAD:-}
-      # File-picker accept list (comma-separated mime/ext, e.g. "image/*,application/pdf").
-      # Unset/blank ⇒ images only.
-      NEXT_PUBLIC_UPLOAD_ACCEPT: ${NEXT_PUBLIC_UPLOAD_ACCEPT:-}
-      # Max size per attached file, in MB. Unset/invalid ⇒ built-in default (10 MB).
-      NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB: ${NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB:-}
     # Resource ceiling for this container. `deploy.resources.limits` is honored by
     # `docker compose up` (Compose v2, non-swarm); `reservations` is a soft floor.
     # Sized for a single Next.js dev server on a shared host — override per-host via env
