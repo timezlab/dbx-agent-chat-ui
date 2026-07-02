@@ -28,7 +28,7 @@ services:
       # URL for a live backend; set to empty for the "no endpoint" inline notice.
       # (Empty strings are coerced to undefined in src/env.ts.)
       # Trailing slash matches `trailingSlash: true` (avoids a 308 redirect on POST).
-      NEXT_PUBLIC_CHAT_ENDPOINT_URL: ${NEXT_PUBLIC_CHAT_ENDPOINT_URL:-/api/chat/}
+      NEXT_PUBLIC_CHAT_ENDPOINT_URL: ${NEXT_PUBLIC_CHAT_ENDPOINT_URL:-/api/chat}
       # Optional host-provided REST endpoints (all independent; unset ⇒ local fallback).
       NEXT_PUBLIC_HISTORY_API_URL: ${NEXT_PUBLIC_HISTORY_API_URL:-}
       NEXT_PUBLIC_FEEDBACK_API_URL: ${NEXT_PUBLIC_FEEDBACK_API_URL:-}

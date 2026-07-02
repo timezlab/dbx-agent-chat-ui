@@ -412,3 +412,14 @@ Add US2 → US4 → US3 → US5, each tested independently and deployable, witho
   includes the streaming state, forcing a clean re-parse when a turn settles (matches the
   fresh-mount / reload render, which was already correct). Charts in the demo recording
   are PNGs drawn with Pillow (matplotlib unavailable), base64-embedded.
+- **Font fallback + base-path relative endpoints (2026-07-02)**: (1) The UI font
+  (`next/font/google` Inter) fell back to the browser default serif (Times New Roman) in
+  an embed/offline build because the `--font-sans` chain had no generic fallback. Added
+  `ui-sans-serif, system-ui, …, sans-serif` (fallback inside `var()` so an unset var can't
+  invalidate the declaration) — worst case is a system sans-serif, never serif. (2)
+  Endpoint URLs are now resolved against the app's runtime base path
+  (`lib/config.ts › resolveDeploymentUrl`, applied in `resolveConfig` to
+  chat/history/feedback/agents): a root-relative `/api/chat` reaches
+  `domain.com/path/proxy/api/chat` when the app is mounted under that subpath, so ONE
+  static build serves any mount point. Absolute/protocol-relative URLs bypass. See
+  `contracts/config.md`.

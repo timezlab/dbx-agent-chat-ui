@@ -8,15 +8,46 @@ import { MAX_ATTACHMENT_SIZE_BYTES } from "@/lib/chat/attachments";
  */
 export function resolveConfig(): CapabilityConfig {
   return CapabilityConfigSchema.parse({
-    chatEndpointUrl: env.NEXT_PUBLIC_CHAT_ENDPOINT_URL,
-    historyUrl: env.NEXT_PUBLIC_HISTORY_API_URL,
-    feedbackUrl: env.NEXT_PUBLIC_FEEDBACK_API_URL,
-    agentsUrl: env.NEXT_PUBLIC_AGENTS_API_URL,
+    chatEndpointUrl: resolveDeploymentUrl(env.NEXT_PUBLIC_CHAT_ENDPOINT_URL),
+    historyUrl: resolveDeploymentUrl(env.NEXT_PUBLIC_HISTORY_API_URL),
+    feedbackUrl: resolveDeploymentUrl(env.NEXT_PUBLIC_FEEDBACK_API_URL),
+    agentsUrl: resolveDeploymentUrl(env.NEXT_PUBLIC_AGENTS_API_URL),
     samplePrompts: parseSamplePrompts(env.NEXT_PUBLIC_SAMPLE_PROMPTS),
     uploadEnabled: parseUploadEnabled(env.NEXT_PUBLIC_ENABLE_UPLOAD),
     uploadAccept: parseUploadAccept(env.NEXT_PUBLIC_UPLOAD_ACCEPT),
     uploadMaxSizeBytes: parseUploadMaxSizeMb(env.NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB),
   });
+}
+
+/**
+ * Resolve a configured endpoint against the app's deployment base path, so ONE static
+ * build works under any mount point without a rebuild (constitution: "one static build
+ * serves notebook/proxy, Databricks Apps, and manual copy").
+ *
+ * A root-relative value like `/api/chat` is treated as relative to where the app is
+ * actually served — at `domain.com/path/proxy/` it becomes
+ * `domain.com/path/proxy/api/chat`, NOT the domain root. Resolving against the page's own
+ * base (`document.baseURI`) means an API call always goes back through the same
+ * origin+prefix the app was loaded from — correct for root hosting, a reverse-proxy
+ * subpath, and a driver-proxy alike. Absolute (`https://…`) and protocol-relative
+ * (`//host/…`) URLs pass through unchanged, so a truly cross-origin endpoint is still
+ * possible. Unset/blank ⇒ undefined.
+ *
+ * On the server (static prerender, no `document`) the raw value is returned; `resolveConfig`
+ * runs again in the browser at runtime where the real base is known.
+ */
+export function resolveDeploymentUrl(
+  raw: string | undefined,
+  baseHref: string | undefined = typeof document !== "undefined"
+    ? document.baseURI
+    : undefined,
+): string | undefined {
+  const value = raw?.trim();
+  if (!value) return undefined;
+  if (/^(https?:)?\/\//i.test(value)) return value; // absolute or protocol-relative
+  if (!baseHref) return value; // SSR/prerender — re-resolved client-side at runtime
+  const baseDir = new URL(".", baseHref).href; // deployment root (single-page export)
+  return new URL(value.replace(/^\/+/, ""), baseDir).href;
 }
 
 /**

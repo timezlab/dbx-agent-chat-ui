@@ -7,9 +7,10 @@ import fs from "node:fs";
 // Embed build — produces a self-contained static artifact in manual/.
 // Used for constrained notebook/proxy hosts that can only serve a small number of files.
 export default defineConfig(({ mode }) => {
-  // Load env file based on `mode` in the current working directory.
-  // Set the third parameter to '' to load all env regardless of the `VITE_` prefix.
-  const env = loadEnv(mode, resolve(__dirname, ".."), "NEXT_PUBLIC_");
+  // Load `NEXT_PUBLIC_*` from `frontend/.env` (this dir) — same file `next dev`/docker
+  // read (env_file: frontend/.env). Was `resolve(__dirname, "..")` (repo root), which has
+  // no .env, so the endpoint was never baked and the embed showed "not configured".
+  const env = loadEnv(mode, __dirname, "NEXT_PUBLIC_");
   
   const processEnvDefines: Record<string, string> = {};
   for (const key in env) {

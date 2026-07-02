@@ -37,6 +37,15 @@ across a reload (T071).
   (SC-001, SC-004). The chat endpoint is the one URL the app needs to stream.
 - The endpoint URL is configuration, never a hardcoded constant (FR-013). Per-vendor
   path/field/event *naming* lives in the single SSE handler, not in a UI component.
+- **Base-path relative resolution** (`lib/config.ts › resolveDeploymentUrl`): a
+  root-relative URL (`/api/chat`) is resolved against the app's own base path
+  (`document.baseURI`) at runtime, so ONE static build works at any mount point without a
+  rebuild. Hosted at `domain.com/path/proxy/`, `/api/chat` reaches
+  `domain.com/path/proxy/api/chat` (co-located with the app), not the domain root —
+  requests always go back through the same origin+prefix the app was loaded from (root,
+  reverse-proxy subpath, and driver-proxy alike). Absolute (`https://…`) and
+  protocol-relative (`//host/…`) URLs bypass this, so a truly cross-origin endpoint is
+  still possible. Applies to all four URLs (chat/history/feedback/agents).
 - "Capability present" = its URL is set **and** its calls succeed; a failed call
   demotes to the fallback at runtime (history→local, feedback→mock, agents→hidden).
 - An unset `NEXT_PUBLIC_CHAT_ENDPOINT_URL` MUST surface a clear, non-crashing inline

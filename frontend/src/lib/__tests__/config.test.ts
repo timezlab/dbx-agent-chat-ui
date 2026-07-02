@@ -7,8 +7,59 @@ import {
   parseUploadAccept,
   parseUploadEnabled,
   parseUploadMaxSizeMb,
+  resolveDeploymentUrl,
 } from "@/lib/config";
 import { MAX_ATTACHMENT_SIZE_BYTES } from "@/lib/chat/attachments";
+
+describe("resolveDeploymentUrl", () => {
+  const proxyBase = "https://domain.com/path/proxy/";
+  const rootBase = "https://domain.com/";
+
+  it("resolves a root-relative path against a subpath deployment base", () => {
+    // The user just enters "/api/chat"; under a proxy subpath it must hit the API
+    // co-located with the app, not the domain root.
+    expect(resolveDeploymentUrl("/api/chat", proxyBase)).toBe(
+      "https://domain.com/path/proxy/api/chat",
+    );
+    expect(resolveDeploymentUrl("/api/chat", proxyBase)).toBe(
+      "https://domain.com/path/proxy/api/chat",
+    );
+  });
+
+  it("is a no-op-equivalent at the domain root", () => {
+    expect(resolveDeploymentUrl("/api/chat", rootBase)).toBe(
+      "https://domain.com/api/chat",
+    );
+  });
+
+  it("resolves against the base directory even from a deep entry document", () => {
+    expect(
+      resolveDeploymentUrl("/api/chat", "https://domain.com/path/proxy/index.html"),
+    ).toBe("https://domain.com/path/proxy/api/chat");
+  });
+
+  it("treats a no-leading-slash path the same as root-relative", () => {
+    expect(resolveDeploymentUrl("api/chat", proxyBase)).toBe(
+      "https://domain.com/path/proxy/api/chat",
+    );
+  });
+
+  it("passes absolute and protocol-relative URLs through unchanged", () => {
+    expect(resolveDeploymentUrl("https://agent.example/invoke", proxyBase)).toBe(
+      "https://agent.example/invoke",
+    );
+    expect(resolveDeploymentUrl("//cdn.example/x", proxyBase)).toBe(
+      "//cdn.example/x",
+    );
+  });
+
+  it("returns undefined for unset/blank, and the raw value when no base is known", () => {
+    expect(resolveDeploymentUrl(undefined, proxyBase)).toBeUndefined();
+    expect(resolveDeploymentUrl("   ", proxyBase)).toBeUndefined();
+    // No base (server prerender) → raw value, resolved again client-side later.
+    expect(resolveDeploymentUrl("/api/chat", "")).toBe("/api/chat");
+  });
+});
 
 describe("parseSamplePrompts", () => {
   it("parses a JSON array of strings, trimming and dropping blanks", () => {

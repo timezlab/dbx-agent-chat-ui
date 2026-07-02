@@ -16,7 +16,13 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  /* next/font sets `--font-sans` (Inter) on <html>; the generics after it are the
+     hard floor so a failed/absent webfont degrades to a system sans-serif — never the
+     browser's default serif (Times New Roman) in an embed/offline build. The fallback
+     inside var() matters: an unset var with no fallback would invalidate the whole
+     declaration. */
+  --font-sans: var(--font-sans, ui-sans-serif), ui-sans-serif, system-ui,
+    -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   /* Inter is the single UI face; code/paths fall back to the platform monospace
      stack (Geist Mono was removed — no second webfont to ship). */
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
