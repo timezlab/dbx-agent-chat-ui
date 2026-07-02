@@ -1,8 +1,10 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
-/** An absolute URL (real agent / proxy) or a same-origin path like `/api/chat` (the
- *  dev mock route). Same-origin paths let the browser stream without CORS. */
+/** An absolute URL (real agent / proxy) or a same-origin path like `/api/chat`.
+ *  Same-origin paths let the browser stream without CORS and let one static build
+ *  serve any mount point (resolved against the base path at runtime by
+ *  `resolveDeploymentUrl`). Used for every host endpoint, not just chat. */
 const endpointUrl = z
   .string()
   .refine((v) => v.startsWith("/") || URL.canParse(v), {
@@ -18,15 +20,15 @@ export const env = createEnv({
 
     // Host-provided REST endpoint for conversation history. Unset ⇒ localStorage
     // (degrading to in-memory). This repo owns no history backend (Principle I).
-    NEXT_PUBLIC_HISTORY_API_URL: z.string().url().optional(),
+    NEXT_PUBLIC_HISTORY_API_URL: endpointUrl.optional(),
 
     // Host-provided REST endpoint for reply feedback (thumbs + comment). Unset ⇒
     // no-op/local mock sink. Failures are non-blocking.
-    NEXT_PUBLIC_FEEDBACK_API_URL: z.string().url().optional(),
+    NEXT_PUBLIC_FEEDBACK_API_URL: endpointUrl.optional(),
 
     // Host-provided REST endpoint listing selectable agents (id + name). Unset /
     // failure / empty ⇒ agent selector hidden, default endpoint used.
-    NEXT_PUBLIC_AGENTS_API_URL: z.string().url().optional(),
+    NEXT_PUBLIC_AGENTS_API_URL: endpointUrl.optional(),
 
     // Empty-state sample prompts, as a JSON array of strings (e.g.
     // `["Summarize this","Write a SQL query"]`). Parsed in lib/config; malformed
