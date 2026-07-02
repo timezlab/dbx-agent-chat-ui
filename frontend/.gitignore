@@ -15,8 +15,8 @@
 
 # local SSE playback recordings (raw agent stream captures — not committed).
 # The small sample `default.txt` IS committed; larger real captures are local-only.
-/public/recordings/*
-!/public/recordings/default.txt
+/sse-recordings/*
+!/sse-recordings/default.txt
 
 # next.js
 /.next/
