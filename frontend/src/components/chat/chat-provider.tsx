@@ -28,6 +28,8 @@ export interface ChatContextValue extends UseChatResult {
   uploadAccept?: string;
   /** Max size per attached file, in bytes (T071). */
   uploadMaxSizeBytes?: number;
+  /** Whether the developer/test Dev tools + Replay affordances are enabled (FR-026). */
+  devToolsEnabled: boolean;
 }
 
 const ChatContext = React.createContext<ChatContextValue | null>(null);
@@ -61,6 +63,7 @@ export function ChatProvider({ config, children }: ChatProviderProps) {
     uploadEnabled: config?.uploadEnabled ?? false,
     uploadAccept: config?.uploadAccept,
     uploadMaxSizeBytes: config?.uploadMaxSizeBytes,
+    devToolsEnabled: config?.devToolsEnabled ?? false,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

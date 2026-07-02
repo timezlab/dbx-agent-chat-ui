@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_UPLOAD_ACCEPT,
   isChatEndpointMissing,
+  parseDevToolsEnabled,
   parseSamplePrompts,
   parseUploadAccept,
   parseUploadEnabled,
@@ -128,6 +129,22 @@ describe("parseUploadMaxSizeMb (T071)", () => {
   it("converts a configured MB value to bytes", () => {
     expect(parseUploadMaxSizeMb("5")).toBe(5 * 1024 * 1024);
   });
+});
+
+describe("parseDevToolsEnabled (FR-026)", () => {
+  it.each(["1", "true", "yes", "TRUE", " Yes "])(
+    "treats %j as enabled",
+    (raw) => {
+      expect(parseDevToolsEnabled(raw)).toBe(true);
+    },
+  );
+
+  it.each([undefined, "", "0", "false", "no", "on"])(
+    "treats %j as disabled (default off)",
+    (raw) => {
+      expect(parseDevToolsEnabled(raw)).toBe(false);
+    },
+  );
 });
 
 describe("isChatEndpointMissing", () => {

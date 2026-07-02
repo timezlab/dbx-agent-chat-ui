@@ -24,5 +24,9 @@ export const CapabilityConfigSchema = z.object({
   // NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB (T071) — giới hạn dung lượng mỗi file, đơn vị MB.
   // Optional; default áp dụng tại lib/config.ts#parseUploadMaxSizeMb.
   uploadMaxSizeBytes: z.number().optional(),
+  // NEXT_PUBLIC_DEV_TOOLS (FR-026) — bật entry Dev tools / Replay. Optional; unset ⇒
+  // false (ẩn hoàn toàn). Non-secret selector (Principle II); parse tại
+  // lib/config.ts#parseDevToolsEnabled.
+  devToolsEnabled: z.boolean().optional(),
 });
 export type CapabilityConfig = z.infer<typeof CapabilityConfigSchema>;

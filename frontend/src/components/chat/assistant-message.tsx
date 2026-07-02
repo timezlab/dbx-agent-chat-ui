@@ -12,6 +12,7 @@ import {
   MessageAvatar,
   MessageContent,
 } from "@/components/ui/message";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ActivityGroup } from "./activity-group";
 import { StreamError } from "./stream-error";
 import { FeedbackPanel } from "./feedback-panel";
@@ -109,7 +110,7 @@ export function AssistantMessage({
                       shikiTheme={SHIKI_THEME}
                       linkSafety={LINK_SAFETY}
                       isAnimating={streaming && i === lastSegment && bi === lastMd}
-                      className="min-w-0 animate-in fade-in-0 slide-in-from-bottom-1 text-sm leading-relaxed duration-300 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                      className="min-w-0 animate-in fade-in-0 slide-in-from-bottom-1 text-sm leading-relaxed duration-300 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_ul]:list-disc [&_ul]:list-outside [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:list-outside [&_ol]:pl-6"
                     >
                       {block.text}
                     </Streamdown>
@@ -131,11 +132,35 @@ export function AssistantMessage({
         })}
 
         {streaming && !hasVisible ? (
-          <span
-            data-slot="assistant-typing"
-            aria-label="Assistant is typing"
-            className="inline-block h-4 w-2 animate-pulse rounded-xs bg-muted-foreground/60"
-          />
+          // Before the first token/tool arrives, show a skeleton placeholder (pulsing
+          // lines) at the bottom so the turn reads as "loading", not empty. Replaced by
+          // the streamed content — or its own caret — the moment anything is visible.
+          <div
+            data-slot="assistant-skeleton"
+            role="status"
+            aria-label="Assistant is responding"
+            className="flex w-full flex-col gap-2 py-0.5 animate-in fade-in-0 duration-300"
+          >
+            <Skeleton className="h-3.5 w-2/5" />
+            <Skeleton className="h-3.5 w-11/12" />
+            <Skeleton className="h-3.5 w-3/4" />
+          </div>
+        ) : null}
+
+        {streaming && hasVisible ? (
+          // Content is already flowing but the turn hasn't settled — a bouncing-dots
+          // indicator at the bottom signals "still generating" (distinct from the
+          // pre-first-event skeleton above). The three dots pulse out of phase.
+          <div
+            data-slot="assistant-generating"
+            role="status"
+            aria-label="Assistant is generating"
+            className="flex items-center gap-1 py-1"
+          >
+            <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:-0.3s]" />
+            <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:-0.15s]" />
+            <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50" />
+          </div>
         ) : null}
 
         {message.error ? <StreamError message={message.error} /> : null}

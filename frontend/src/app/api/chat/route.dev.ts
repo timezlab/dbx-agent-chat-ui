@@ -16,6 +16,10 @@
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
+// Frame parsing + per-frame delay come from the shared pure module, so the mock and the
+// client-side replay stream frames identically (FR-017 / FR-018 — single source of truth).
+import { delayFor, parseFrames } from "@/lib/stream/recording";
+
 // NB: no `export const dynamic = "force-dynamic"` — that directive is rejected while
 // `output: "export"` is set (even in `next dev`). A POST handler is dynamic by nature
 // in dev, so the stream still works; the `.dev.ts` gate keeps it out of the static build.
@@ -43,41 +47,7 @@ async function resolveRecordingPath(): Promise<string | null> {
   return null;
 }
 
-const TEXT_DELAY_MS = 20; // text streams fast
-const TOOL_DELAY_MS = 400; // tool events lag, so tool latency is visible
-
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** Split raw SSE text into frames, each carrying its concatenated `data:` payload. */
-function parseFrames(text: string): string[] {
-  const frames: string[] = [];
-  for (const block of text.split(/\r?\n\r?\n/)) {
-    const dataParts: string[] = [];
-    for (const rawLine of block.split(/\r?\n/)) {
-      const line = rawLine.trimEnd();
-      if (line.startsWith(":")) continue; // comment / keepalive
-      if (line.startsWith("data:")) {
-        dataParts.push(line.slice("data:".length).replace(/^ /, ""));
-      }
-    }
-    if (dataParts.length > 0) frames.push(dataParts.join("\n"));
-  }
-  return frames;
-}
-
-/** Tool frames (function_call / function_call_output) stream slower than text. */
-function delayFor(payload: string): number {
-  try {
-    const json = JSON.parse(payload) as { item?: { type?: string } };
-    const itemType = json.item?.type;
-    if (itemType === "function_call" || itemType === "function_call_output") {
-      return TOOL_DELAY_MS;
-    }
-  } catch {
-    // non-JSON frame → treat as text
-  }
-  return TEXT_DELAY_MS;
-}
 
 export async function POST(request: Request): Promise<Response> {
   const recordingPath = await resolveRecordingPath();

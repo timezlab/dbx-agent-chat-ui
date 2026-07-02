@@ -47,6 +47,12 @@ export const env = createEnv({
     // Max size per attached file, in MB. Parsed in lib/config; unset/invalid ⇒ the
     // built-in default (see MAX_ATTACHMENT_SIZE_BYTES in lib/chat/attachments.ts).
     NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB: z.string().optional(),
+
+    // Toggle the developer/test **Dev tools** entry (and therefore Replay mode). Any of
+    // "1"/"true"/"yes" (case-insensitive) enables it; unset / anything else ⇒ off
+    // (default). A non-secret build/deploy-time selector (Principle II) — a demo deploy
+    // sets it, a customer-facing deploy leaves it off. See FR-026.
+    NEXT_PUBLIC_DEV_TOOLS: z.string().optional(),
   },
   runtimeEnv: {
     NEXT_PUBLIC_CHAT_ENDPOINT_URL: process.env.NEXT_PUBLIC_CHAT_ENDPOINT_URL,
@@ -57,6 +63,7 @@ export const env = createEnv({
     NEXT_PUBLIC_ENABLE_UPLOAD: process.env.NEXT_PUBLIC_ENABLE_UPLOAD,
     NEXT_PUBLIC_UPLOAD_ACCEPT: process.env.NEXT_PUBLIC_UPLOAD_ACCEPT,
     NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB: process.env.NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB,
+    NEXT_PUBLIC_DEV_TOOLS: process.env.NEXT_PUBLIC_DEV_TOOLS,
   },
   // Treat an empty-string env var (e.g. `NEXT_PUBLIC_CHAT_ENDPOINT_URL=` from a
   // docker-compose default) as unset, so an unconfigured deployment falls back to

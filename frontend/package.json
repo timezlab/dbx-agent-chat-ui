@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "next dev",
     "mock:api": "node scripts/mock-api.mjs",
-    "build:manual": "next build && rm -rf out-manual && mv out out-manual && node scripts/verify-manual-output.mjs && cd out-manual && python3 -m zipfile -c ../../manual.zip * && cd .. && rm -rf out-manual",
-    "build:embed": "vite build --config vite.embed.config.ts && node scripts/verify-embed-output.mjs && cp out-embed/index.html ../embed.html && rm -rf out-embed",
+    "build:manual": "node scripts/gen-replay-recording.mjs && next build && rm -rf out-manual && mv out out-manual && node scripts/verify-manual-output.mjs && cd out-manual && python3 -m zipfile -c ../../manual.zip * && cd .. && rm -rf out-manual",
+    "build:embed": "node scripts/gen-replay-recording.mjs && vite build --config vite.embed.config.ts && node scripts/verify-embed-output.mjs && cp out-embed/index.html ../embed.html && rm -rf out-embed",
     "lint": "eslint",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest"

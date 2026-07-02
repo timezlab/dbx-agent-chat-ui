@@ -45,7 +45,7 @@ export function MessageList({
     // primitive default (8px) is far too tight for a streaming chat — a user reading a
     // few lines up (~250px) would lose the follow. Widen it so streaming stays glued
     // unless the user scrolls well up.
-    <MessageScrollerProvider autoScroll scrollEdgeThreshold={250}>
+    <MessageScrollerProvider autoScroll scrollEdgeThreshold={350}>
       <MessageScroller
         data-slot="message-list"
         className={cn("flex-1", className)}

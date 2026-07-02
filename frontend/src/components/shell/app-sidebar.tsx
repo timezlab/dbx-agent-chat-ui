@@ -17,6 +17,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { NavSettings } from "./nav-settings";
+import { NavDevTools } from "./nav-devtools";
 
 export interface AppSidebarProps {
   config: CapabilityConfig;
@@ -97,6 +98,11 @@ export function AppSidebar({ config }: AppSidebarProps) {
 
       <SidebarFooter>
         <SidebarMenu>
+          {config.devToolsEnabled ? (
+            <SidebarMenuItem>
+              <NavDevTools />
+            </SidebarMenuItem>
+          ) : null}
           <SidebarMenuItem>
             <NavSettings config={config} />
           </SidebarMenuItem>

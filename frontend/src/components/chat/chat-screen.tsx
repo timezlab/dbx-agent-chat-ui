@@ -8,6 +8,7 @@ import { firstTodoWriteCallId, selectLatestTodos } from "@/lib/chat/todos";
 import { useChatContext } from "./chat-provider";
 import { MessageList } from "./message-list";
 import { ChatComposer } from "./chat-composer";
+import { ReplayControl } from "./replay-control";
 import { ChatEmpty } from "./chat-empty";
 
 export type ChatScreenProps = React.ComponentProps<"div">;
@@ -35,6 +36,14 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
     uploadEnabled,
     uploadAccept,
     uploadMaxSizeBytes,
+    replayMode,
+    replaySession,
+    replayPlay,
+    replayPause,
+    replaySetSource,
+    replaySetTiming,
+    replayResetTiming,
+    replaySetSpeed,
   } = useChatContext();
   const todos = selectLatestTodos(messages);
   const firstPlanCallId = firstTodoWriteCallId(messages);
@@ -85,21 +94,38 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
         />
       )}
 
+      {/* The input region: composer, OR the Replay control while Replay mode is on. Both
+          render in the IDENTICAL wrapper and dock the same TodoCard, so toggling causes
+          no layout shift (FR-002/FR-002a, SC-007). */}
       <div className="mx-auto w-full max-w-3xl px-4 pb-4">
-        <ChatComposer
-          onSend={send}
-          onCancel={cancel}
-          todos={todos}
-          busy={status === "streaming"}
-          disabled={configError != null}
-          agents={agents}
-          selectedAgentId={selectedAgentId}
-          onSelectAgent={selectAgent}
-          agentsAvailable={agentsAvailable}
-          uploadEnabled={uploadEnabled}
-          uploadAccept={uploadAccept}
-          uploadMaxSizeBytes={uploadMaxSizeBytes}
-        />
+        {replayMode ? (
+          <ReplayControl
+            session={replaySession}
+            todos={todos}
+            onPlay={replayPlay}
+            onPause={replayPause}
+            onSetSource={replaySetSource}
+            onSetTiming={replaySetTiming}
+            onResetTiming={replayResetTiming}
+            onSetSpeed={replaySetSpeed}
+            maxUploadBytes={uploadMaxSizeBytes}
+          />
+        ) : (
+          <ChatComposer
+            onSend={send}
+            onCancel={cancel}
+            todos={todos}
+            busy={status === "streaming"}
+            disabled={configError != null}
+            agents={agents}
+            selectedAgentId={selectedAgentId}
+            onSelectAgent={selectAgent}
+            agentsAvailable={agentsAvailable}
+            uploadEnabled={uploadEnabled}
+            uploadAccept={uploadAccept}
+            uploadMaxSizeBytes={uploadMaxSizeBytes}
+          />
+        )}
       </div>
     </div>
   );

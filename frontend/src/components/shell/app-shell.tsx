@@ -5,6 +5,7 @@ import * as React from "react";
 import { resolveConfig } from "@/lib/config";
 import { ChatProvider } from "@/components/chat/chat-provider";
 import { ChatScreen } from "@/components/chat/chat-screen";
+import { ChatToaster } from "@/components/chat/chat-toaster";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { Separator } from "@/components/ui/separator";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -27,6 +28,7 @@ export function AppShell() {
 
   return (
     <ChatProvider config={config}>
+      <ChatToaster />
       <TooltipProvider delayDuration={300}>
         <SidebarProvider className="h-dvh min-h-0">
           <AppSidebar config={config} />

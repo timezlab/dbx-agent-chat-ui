@@ -16,6 +16,7 @@ export function resolveConfig(): CapabilityConfig {
     uploadEnabled: parseUploadEnabled(env.NEXT_PUBLIC_ENABLE_UPLOAD),
     uploadAccept: parseUploadAccept(env.NEXT_PUBLIC_UPLOAD_ACCEPT),
     uploadMaxSizeBytes: parseUploadMaxSizeMb(env.NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB),
+    devToolsEnabled: parseDevToolsEnabled(env.NEXT_PUBLIC_DEV_TOOLS),
   });
 }
 
@@ -76,6 +77,17 @@ export function parseSamplePrompts(raw: string | undefined): string[] {
  * is opt-in and stays off by default (D-014 defers real upload).
  */
 export function parseUploadEnabled(raw: string | undefined): boolean {
+  if (!raw) return false;
+  return ["1", "true", "yes"].includes(raw.trim().toLowerCase());
+}
+
+/**
+ * Parse `NEXT_PUBLIC_DEV_TOOLS` into a boolean. Truthy = "1"/"true"/"yes"
+ * (case-insensitive, trimmed); everything else (including unset) ⇒ false, so the Dev
+ * tools / Replay entry is opt-in and hidden by default (FR-026, Principle II). Mirrors
+ * `parseUploadEnabled` — a non-secret build/deploy-time selector.
+ */
+export function parseDevToolsEnabled(raw: string | undefined): boolean {
   if (!raw) return false;
   return ["1", "true", "yes"].includes(raw.trim().toLowerCase());
 }
