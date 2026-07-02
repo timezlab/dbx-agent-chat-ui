@@ -42,3 +42,77 @@ describe("ChatComposer (US1 send + US2 stop)", () => {
     expect(screen.getByRole("button", { name: "Queue message" })).toBeEnabled();
   });
 });
+
+describe("ChatComposer — toolbar: upload gating (env-default-off)", () => {
+  it("disables the attach button by default (uploadEnabled unset)", () => {
+    render(<ChatComposer onSend={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Attach files" })).toBeDisabled();
+  });
+
+  it("disables the attach button when uploadEnabled is explicitly false", () => {
+    render(<ChatComposer onSend={vi.fn()} uploadEnabled={false} />);
+    expect(screen.getByRole("button", { name: "Attach files" })).toBeDisabled();
+  });
+
+  it("enables the attach button when uploadEnabled is true", () => {
+    render(<ChatComposer onSend={vi.fn()} uploadEnabled />);
+    expect(screen.getByRole("button", { name: "Attach files" })).toBeEnabled();
+  });
+
+  it("keeps the attach button disabled when the composer itself is disabled", () => {
+    render(<ChatComposer onSend={vi.fn()} uploadEnabled disabled />);
+    expect(screen.getByRole("button", { name: "Attach files" })).toBeDisabled();
+  });
+});
+
+describe("ChatComposer — toolbar: agent dropdown (US5, FR-026)", () => {
+  const agents = [
+    { id: "a1", name: "Analyst" },
+    { id: "a2", name: "Coder" },
+  ];
+
+  it("always renders the dropdown, with just a placeholder when no agents are configured", () => {
+    render(<ChatComposer onSend={vi.fn()} agents={[]} agentsAvailable={false} />);
+    const trigger = screen.getByLabelText("Select agent");
+    expect(trigger).toBeInTheDocument();
+    expect(trigger).toHaveTextContent("Agent");
+
+    fireEvent.click(trigger);
+    expect(screen.getAllByRole("option")).toHaveLength(1);
+  });
+
+  it("renders the configured agent list when available", () => {
+    render(
+      <ChatComposer
+        onSend={vi.fn()}
+        agents={agents}
+        agentsAvailable
+        selectedAgentId="a1"
+      />,
+    );
+    const trigger = screen.getByLabelText("Select agent");
+    expect(trigger).toHaveTextContent("Analyst");
+
+    fireEvent.click(trigger);
+    expect(screen.getByRole("option", { name: "Analyst" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Coder" })).toBeInTheDocument();
+  });
+
+  it("calls onSelectAgent when a different agent is chosen", () => {
+    const onSelectAgent = vi.fn();
+    render(
+      <ChatComposer
+        onSend={vi.fn()}
+        agents={agents}
+        agentsAvailable
+        selectedAgentId="a1"
+        onSelectAgent={onSelectAgent}
+      />,
+    );
+
+    fireEvent.click(screen.getByLabelText("Select agent"));
+    fireEvent.click(screen.getByRole("option", { name: "Coder" }));
+
+    expect(onSelectAgent).toHaveBeenCalledWith("a2");
+  });
+});

@@ -17,6 +17,7 @@ import {
 import {
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { isBlank } from "@/lib/chat/queue";
@@ -203,40 +204,44 @@ function UploadButton({
   const inputRef = React.useRef<HTMLInputElement>(null);
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        {/* Wrap so the tooltip still fires while the button is disabled. */}
-        <span className="inline-flex">
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="size-8 text-muted-foreground"
-            disabled={disabled || !enabled}
-            onClick={() => inputRef.current?.click()}
-            data-slot="chat-composer-upload"
-            aria-label="Attach files"
-          >
-            <PaperclipIcon />
-          </Button>
-          {enabled ? (
-            <input
-              ref={inputRef}
-              type="file"
-              multiple
-              hidden
-              // Upload is deferred (D-014): capture the pick but do nothing yet.
-              onChange={(e) => {
-                e.currentTarget.value = "";
-              }}
-            />
-          ) : null}
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>
-        {enabled ? "Attach files" : "Attachments are disabled"}
-      </TooltipContent>
-    </Tooltip>
+    // Local provider: ChatComposer must render standalone (customization contract),
+    // not depend on an ancestor AppShell's TooltipProvider. Nesting is safe in Radix.
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {/* Wrap so the tooltip still fires while the button is disabled. */}
+          <span className="inline-flex">
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-8 text-muted-foreground"
+              disabled={disabled || !enabled}
+              onClick={() => inputRef.current?.click()}
+              data-slot="chat-composer-upload"
+              aria-label="Attach files"
+            >
+              <PaperclipIcon />
+            </Button>
+            {enabled ? (
+              <input
+                ref={inputRef}
+                type="file"
+                multiple
+                hidden
+                // Upload is deferred (D-014): capture the pick but do nothing yet.
+                onChange={(e) => {
+                  e.currentTarget.value = "";
+                }}
+              />
+            ) : null}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          {enabled ? "Attach files" : "Attachments are disabled"}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 

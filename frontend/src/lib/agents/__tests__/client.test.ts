@@ -25,7 +25,7 @@ describe("agents client (US5)", () => {
 
   it("remote list() GETs the URL and returns the parsed agents", async () => {
     const fetchMock = vi.fn(
-      async () =>
+      async (_url: RequestInfo | URL, _init?: RequestInit) =>
         new Response(JSON.stringify({ agents }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
