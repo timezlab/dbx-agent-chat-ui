@@ -103,6 +103,9 @@ export function ChatComposer({
   const [text, setText] = React.useState("");
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
   const [attachError, setAttachError] = React.useState<string | null>(null);
+  const [isDragging, setIsDragging] = React.useState(false);
+  const dragCounter = React.useRef(0);
+
   const canSend = !disabled && !isBlank(text);
   // While streaming with an empty composer, the action button becomes Stop.
   // Start typing to queue another message (Send takes over). Stop only appears
@@ -155,19 +158,68 @@ export function ChatComposer({
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   };
 
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current += 1;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current -= 1;
+    if (dragCounter.current === 0) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounter.current = 0;
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      if (uploadEnabled && !disabled) {
+        void handleFilesPicked(e.dataTransfer.files);
+      }
+    }
+  };
+
   return (
     <form
       data-slot="chat-composer"
       className={cn(
-        "flex flex-col rounded-2xl border border-input bg-background shadow-sm transition-[border-color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/40",
+        "flex flex-col rounded-2xl border border-input bg-background shadow-sm transition-[border-color,box-shadow,background-color] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/40 relative overflow-hidden",
+        isDragging && uploadEnabled && !disabled && "border-ring/50 ring-2 ring-ring/20",
         className,
       )}
       onSubmit={(e) => {
         e.preventDefault();
         submit();
       }}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
       {...props}
     >
+      {isDragging && uploadEnabled && !disabled && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-sm rounded-2xl transition-all duration-300 pointer-events-none">
+          <div className="flex items-center gap-2.5 px-5 py-2.5 rounded-full border border-border/50 bg-background shadow-[0_4px_24px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_24px_rgba(255,255,255,0.02)] animate-in fade-in zoom-in-[0.98] slide-in-from-bottom-1 duration-300 ease-out">
+            <PaperclipIcon className="size-4 text-muted-foreground" />
+            <span className="text-sm font-medium tracking-tight text-foreground">Drop to attach</span>
+          </div>
+        </div>
+      )}
+
       {todos.length > 0 ? (
         <TodoCard
           todos={todos}
