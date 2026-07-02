@@ -13,13 +13,20 @@ existing [`frontend/src/env.ts`](../../../../frontend/src/env.ts) via
 | `NEXT_PUBLIC_FEEDBACK_API_URL` | URL string (optional) | unset | Feedback submission endpoint. Unset ⇒ no-op/local mock sink. |
 | `NEXT_PUBLIC_AGENTS_API_URL` | URL string (optional) | unset | Agents list endpoint. Unset ⇒ agent selector hidden. |
 | `NEXT_PUBLIC_SAMPLE_PROMPTS` | JSON array of strings (optional) | unset | Empty-state starter prompts, e.g. `'["Summarize this doc","Write a SQL query"]'`. Malformed/non-array/unset ⇒ `[]` (no sample cards) — never throws. |
-| `NEXT_PUBLIC_ENABLE_UPLOAD` | boolean-ish string (optional) | unset (off) | Shows the composer's attach/upload affordance. `"1"`/`"true"`/`"yes"` (case-insensitive) ⇒ on; anything else ⇒ off. Upload itself stays deferred (D-014) — the button is a no-op affordance when on. |
+| `NEXT_PUBLIC_ENABLE_UPLOAD` | boolean-ish string (optional) | unset (off) | Shows the composer's attach/upload affordance. `"1"`/`"true"`/`"yes"` (case-insensitive) ⇒ on; anything else ⇒ off. |
+| `NEXT_PUBLIC_UPLOAD_ACCEPT` | comma-separated mime patterns/extensions (optional) | `image/*` | File-picker accept list, e.g. `"image/*,application/pdf,.csv"`. Unset/blank ⇒ images only — a deployment must opt in explicitly to accept other file types. One uniform `Attachment` shape for every file type (T071); no per-vendor branching in the UI. |
+| `NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB` | number string (optional) | `10` (`MAX_ATTACHMENT_SIZE_BYTES`) | Max size per attached file, in MB. Unset/non-numeric/≤0 ⇒ the built-in default. Chosen to stay under Databricks Model Serving's documented 16 MB request-payload limit (`docs/references/databricks-research.md`); raise it for a custom Apps/proxy backend known to allow more. |
 
 Each URL is **independent** — any subset may be set (FR-017). Contracts for the three
-providers are in [`providers.md`](./providers.md). `NEXT_PUBLIC_SAMPLE_PROMPTS` and
-`NEXT_PUBLIC_ENABLE_UPLOAD` are parsed in [`lib/config.ts`](../../../../frontend/src/lib/config.ts)
-(`parseSamplePrompts`, `parseUploadEnabled`) rather than validated in `env.ts`, so a
-malformed value degrades gracefully instead of failing env parsing at boot.
+providers are in [`providers.md`](./providers.md). `NEXT_PUBLIC_SAMPLE_PROMPTS`,
+`NEXT_PUBLIC_ENABLE_UPLOAD`, `NEXT_PUBLIC_UPLOAD_ACCEPT`, and
+`NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB` are parsed in
+[`lib/config.ts`](../../../../frontend/src/lib/config.ts) (`parseSamplePrompts`,
+`parseUploadEnabled`, `parseUploadAccept`, `parseUploadMaxSizeMb`) rather than validated
+in `env.ts`, so a malformed value degrades gracefully instead of failing env parsing at
+boot. Attachments themselves are **session-only** — `lib/history/local.ts` strips each
+attachment's `dataUrl` before writing to `localStorage`, so file bytes never persist
+across a reload (T071).
 
 ### Rules
 

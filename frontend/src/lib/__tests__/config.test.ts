@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_UPLOAD_ACCEPT,
   isChatEndpointMissing,
   parseSamplePrompts,
+  parseUploadAccept,
   parseUploadEnabled,
+  parseUploadMaxSizeMb,
 } from "@/lib/config";
+import { MAX_ATTACHMENT_SIZE_BYTES } from "@/lib/chat/attachments";
 
 describe("parseSamplePrompts", () => {
   it("parses a JSON array of strings, trimming and dropping blanks", () => {
@@ -47,6 +51,32 @@ describe("parseUploadEnabled", () => {
       expect(parseUploadEnabled(raw)).toBe(false);
     },
   );
+});
+
+describe("parseUploadAccept (T071)", () => {
+  it("defaults to images only when unset/blank", () => {
+    expect(parseUploadAccept(undefined)).toBe(DEFAULT_UPLOAD_ACCEPT);
+    expect(parseUploadAccept("   ")).toBe(DEFAULT_UPLOAD_ACCEPT);
+  });
+
+  it("returns the trimmed configured value", () => {
+    expect(parseUploadAccept(" image/*,application/pdf ")).toBe(
+      "image/*,application/pdf",
+    );
+  });
+});
+
+describe("parseUploadMaxSizeMb (T071)", () => {
+  it("defaults to MAX_ATTACHMENT_SIZE_BYTES when unset/invalid", () => {
+    expect(parseUploadMaxSizeMb(undefined)).toBe(MAX_ATTACHMENT_SIZE_BYTES);
+    expect(parseUploadMaxSizeMb("not a number")).toBe(MAX_ATTACHMENT_SIZE_BYTES);
+    expect(parseUploadMaxSizeMb("0")).toBe(MAX_ATTACHMENT_SIZE_BYTES);
+    expect(parseUploadMaxSizeMb("-5")).toBe(MAX_ATTACHMENT_SIZE_BYTES);
+  });
+
+  it("converts a configured MB value to bytes", () => {
+    expect(parseUploadMaxSizeMb("5")).toBe(5 * 1024 * 1024);
+  });
 });
 
 describe("isChatEndpointMissing", () => {

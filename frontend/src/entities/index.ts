@@ -5,6 +5,7 @@
  */
 
 export * from "./deepagents-tools";
+export * from "./attachment";
 export * from "./message";
 export * from "./conversation";
 export * from "./agent";

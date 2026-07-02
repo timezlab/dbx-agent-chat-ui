@@ -28,6 +28,7 @@ const restored: Conversation = {
       id: "m1",
       role: "user",
       parts: [{ type: "text", text: "earlier" }],
+      attachments: [],
       status: "complete",
       error: null,
       feedback: null,

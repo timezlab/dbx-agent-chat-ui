@@ -1,10 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { ArrowUpIcon, PaperclipIcon, SquareIcon } from "lucide-react";
+import { ArrowUpIcon, PaperclipIcon, SquareIcon, XIcon } from "lucide-react";
 
-import type { Agent, Todo } from "@/entities";
+import type { Agent, Attachment, Todo } from "@/entities";
 import { cn } from "@/lib/utils";
+import { validateAttachment } from "@/lib/chat/attachments";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -25,8 +26,9 @@ import { TodoCard } from "./todo-card";
 
 export interface ChatComposerProps
   extends Omit<React.ComponentProps<"form">, "onSubmit"> {
-  /** Dispatch the typed text. Blank input is ignored here and by the hook (FR-002). */
-  onSend: (text: string) => void;
+  /** Dispatch the typed text (+ any attached files, T071). Blank input is ignored
+   *  here and by the hook (FR-002) — attachments alone never trigger a send. */
+  onSend: (text: string, attachments: Attachment[]) => void;
   /** Abort the active generation. The stop affordance shows only while `busy` (US2). */
   onCancel?: () => void;
   /** The agent's current plan; rendered as an expandable strip ON the input card. */
@@ -44,8 +46,35 @@ export interface ChatComposerProps
   onSelectAgent?: (id: string) => void;
   /** Whether to render the agent dropdown (agents configured + non-empty, FR-026). */
   agentsAvailable?: boolean;
-  /** Show the attach/upload affordance (env-gated, default off; upload deferred). */
+  /** Show the attach/upload affordance (env-gated, default off). */
   uploadEnabled?: boolean;
+  /** File-picker accept list (mime patterns/extensions, comma-separated, T071). */
+  uploadAccept?: string;
+  /** Max size per attached file, in bytes (T071). */
+  uploadMaxSizeBytes?: number;
+}
+
+function generateAttachmentId(): string {
+  return (
+    globalThis.crypto?.randomUUID?.() ??
+    `att-${Math.random().toString(36).slice(2)}`
+  );
+}
+
+/** Read a `File` into a base64 data URL — client-side only, no backend (T071). */
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error ?? new Error("File read failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /**
@@ -66,10 +95,14 @@ export function ChatComposer({
   onSelectAgent,
   agentsAvailable = false,
   uploadEnabled = false,
+  uploadAccept,
+  uploadMaxSizeBytes,
   className,
   ...props
 }: ChatComposerProps) {
   const [text, setText] = React.useState("");
+  const [attachments, setAttachments] = React.useState<Attachment[]>([]);
+  const [attachError, setAttachError] = React.useState<string | null>(null);
   const canSend = !disabled && !isBlank(text);
   // While streaming with an empty composer, the action button becomes Stop.
   // Start typing to queue another message (Send takes over). Stop only appears
@@ -78,8 +111,10 @@ export function ChatComposer({
 
   const submit = () => {
     if (!canSend) return;
-    onSend(text);
+    onSend(text, attachments);
     setText("");
+    setAttachments([]);
+    setAttachError(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -87,6 +122,37 @@ export function ChatComposer({
       e.preventDefault();
       submit();
     }
+  };
+
+  const handleFilesPicked = async (files: FileList) => {
+    let lastError: string | null = null;
+    for (const pickedFile of Array.from(files)) {
+      const error = validateAttachment(
+        { name: pickedFile.name, mimeType: pickedFile.type, size: pickedFile.size },
+        uploadAccept,
+        uploadMaxSizeBytes,
+      );
+      if (error) {
+        lastError = error;
+        continue;
+      }
+      const dataUrl = await readFileAsDataUrl(pickedFile);
+      setAttachments((prev) => [
+        ...prev,
+        {
+          id: generateAttachmentId(),
+          name: pickedFile.name,
+          mimeType: pickedFile.type,
+          size: pickedFile.size,
+          dataUrl,
+        },
+      ]);
+    }
+    setAttachError(lastError);
+  };
+
+  const removeAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
   };
 
   return (
@@ -109,6 +175,43 @@ export function ChatComposer({
         />
       ) : null}
 
+      {attachments.length > 0 ? (
+        <div
+          data-slot="chat-composer-attachments"
+          className="flex flex-wrap gap-1.5 px-3 pt-2"
+        >
+          {attachments.map((a) => (
+            <span
+              key={a.id}
+              data-slot="chat-composer-attachment"
+              className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground"
+            >
+              <PaperclipIcon className="size-3" />
+              <span className="max-w-40 truncate">{a.name}</span>
+              <span className="text-muted-foreground/70">{formatBytes(a.size)}</span>
+              <button
+                type="button"
+                aria-label={`Remove ${a.name}`}
+                onClick={() => removeAttachment(a.id)}
+                className="ml-0.5 rounded-full hover:text-foreground"
+              >
+                <XIcon className="size-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {attachError ? (
+        <div
+          role="alert"
+          data-slot="chat-composer-upload-error"
+          className="px-3 pt-2 text-xs text-destructive"
+        >
+          {attachError}
+        </div>
+      ) : null}
+
       <div className="px-2 pt-2">
         <Textarea
           data-slot="chat-composer-input"
@@ -126,7 +229,12 @@ export function ChatComposer({
       {/* Toolbar under the textarea (AI-platform layout): left = attach, right = agent picker + send/stop. */}
       <div className="flex items-center justify-between gap-2 px-2 pb-2">
         <div className="flex min-w-0 items-center gap-1.5">
-          <UploadButton enabled={uploadEnabled} disabled={disabled} />
+          <UploadButton
+            enabled={uploadEnabled}
+            disabled={disabled}
+            accept={uploadAccept}
+            onPick={handleFilesPicked}
+          />
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -191,15 +299,20 @@ export function ChatComposer({
 /**
  * The attach affordance. Gated by `NEXT_PUBLIC_ENABLE_UPLOAD` (env → `enabled`): off by
  * default, it renders dimmed + disabled with an explanatory tooltip. When enabled it
- * opens a native file picker, but upload is still deferred (D-014) — the selected file
- * is intentionally not processed yet; this is the UI seam for the future feature.
+ * opens a native file picker; picked files are read client-side (base64 data URL, no
+ * backend) and validated by the parent (`handleFilesPicked`) — this component only
+ * surfaces the picker.
  */
 function UploadButton({
   enabled,
   disabled,
+  accept,
+  onPick,
 }: {
   enabled: boolean;
   disabled: boolean;
+  accept?: string;
+  onPick: (files: FileList) => void;
 }) {
   const inputRef = React.useRef<HTMLInputElement>(null);
 
@@ -228,9 +341,11 @@ function UploadButton({
                 ref={inputRef}
                 type="file"
                 multiple
+                accept={accept}
                 hidden
-                // Upload is deferred (D-014): capture the pick but do nothing yet.
                 onChange={(e) => {
+                  const { files } = e.currentTarget;
+                  if (files && files.length > 0) void onPick(files);
                   e.currentTarget.value = "";
                 }}
               />

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { AttachmentSchema } from "./attachment";
+
 /** Vai trò 1 turn hội thoại. */
 export const MessageRoleSchema = z.enum(["user", "assistant"]);
 export type MessageRole = z.infer<typeof MessageRoleSchema>;
@@ -82,6 +84,10 @@ export const MessageSchema = z.object({
   // user: [1 text part]; assistant: text↔tools xen kẽ theo thứ tự stream.
   // Gửi lại history (ChatRequest.content: string) ⇒ flatten nối các text part.
   parts: z.array(MessagePartSchema),
+  // chỉ user message đính kèm (T071); assistant luôn []. Luôn là mảng (như `parts`),
+  // không `.optional()`. Session-only: `lib/history/local.ts` xoá `dataUrl` trước khi
+  // persist — sau reload chip vẫn hiện tên/dung lượng, không phát lại byte file.
+  attachments: z.array(AttachmentSchema),
   status: MessageStatusSchema,
   error: z.string().nullable(), // chỉ assistant; set khi có error frame
   feedback: z.enum(["up", "down"]).nullable(), // chỉ assistant; 1 lựa chọn hiện tại

@@ -1,7 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ChatComposer } from "@/components/chat/chat-composer";
+
+function file(name: string, mimeType: string, content = "x"): File {
+  return new File([content], name, { type: mimeType });
+}
 
 describe("ChatComposer (US1 send + US2 stop)", () => {
   it("sends non-blank text on click and clears the input", () => {
@@ -12,7 +16,7 @@ describe("ChatComposer (US1 send + US2 stop)", () => {
     fireEvent.change(input, { target: { value: "hello" } });
     fireEvent.click(screen.getByRole("button", { name: "Send message" }));
 
-    expect(onSend).toHaveBeenCalledWith("hello");
+    expect(onSend).toHaveBeenCalledWith("hello", []);
     expect(input).toHaveValue("");
   });
 
@@ -62,6 +66,63 @@ describe("ChatComposer — toolbar: upload gating (env-default-off)", () => {
   it("keeps the attach button disabled when the composer itself is disabled", () => {
     render(<ChatComposer onSend={vi.fn()} uploadEnabled disabled />);
     expect(screen.getByRole("button", { name: "Attach files" })).toBeDisabled();
+  });
+});
+
+describe("ChatComposer — attachments (T071)", () => {
+  it("adds a preview chip for a picked file within the accept/size limits", async () => {
+    render(<ChatComposer onSend={vi.fn()} uploadEnabled />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+
+    fireEvent.change(input, { target: { files: [file("cat.png", "image/png")] } });
+
+    await waitFor(() =>
+      expect(screen.getByText("cat.png")).toBeInTheDocument(),
+    );
+  });
+
+  it("shows an inline error and does not attach a rejected file type", async () => {
+    render(
+      <ChatComposer onSend={vi.fn()} uploadEnabled uploadAccept="image/*" />,
+    );
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+
+    fireEvent.change(input, {
+      target: { files: [file("report.pdf", "application/pdf")] },
+    });
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/report\.pdf/));
+    expect(screen.queryByText("report.pdf")).toBeNull();
+  });
+
+  it("removes a picked attachment via its remove control", async () => {
+    render(<ChatComposer onSend={vi.fn()} uploadEnabled />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file("cat.png", "image/png")] } });
+    await waitFor(() => expect(screen.getByText("cat.png")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByLabelText("Remove cat.png"));
+    expect(screen.queryByText("cat.png")).toBeNull();
+  });
+
+  it("sends attachments alongside the text and clears them after send", async () => {
+    const onSend = vi.fn();
+    render(<ChatComposer onSend={onSend} uploadEnabled />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file("cat.png", "image/png")] } });
+    await waitFor(() => expect(screen.getByText("cat.png")).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText("Message"), {
+      target: { value: "look at this" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    expect(onSend).toHaveBeenCalledTimes(1);
+    const [text, attachments] = onSend.mock.calls[0];
+    expect(text).toBe("look at this");
+    expect(attachments).toHaveLength(1);
+    expect(attachments[0]).toMatchObject({ name: "cat.png", mimeType: "image/png" });
+    expect(screen.queryByText("cat.png")).toBeNull();
   });
 });
 

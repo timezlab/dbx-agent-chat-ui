@@ -35,8 +35,16 @@ export const env = createEnv({
 
     // Toggle the composer's attach/upload affordance. Any of "1"/"true"/"yes"
     // (case-insensitive) enables it; unset / anything else ⇒ disabled (default).
-    // Upload itself is still deferred — enabling only shows the (no-op) button.
     NEXT_PUBLIC_ENABLE_UPLOAD: z.string().optional(),
+
+    // Comma-separated accept list for the file picker (mime patterns and/or
+    // extensions, e.g. "image/*,application/pdf,.csv"). Parsed in lib/config; unset
+    // or blank ⇒ images only (DEFAULT_UPLOAD_ACCEPT).
+    NEXT_PUBLIC_UPLOAD_ACCEPT: z.string().optional(),
+
+    // Max size per attached file, in MB. Parsed in lib/config; unset/invalid ⇒ the
+    // built-in default (see MAX_ATTACHMENT_SIZE_BYTES in lib/chat/attachments.ts).
+    NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB: z.string().optional(),
   },
   runtimeEnv: {
     NEXT_PUBLIC_CHAT_ENDPOINT_URL: process.env.NEXT_PUBLIC_CHAT_ENDPOINT_URL,
@@ -45,6 +53,8 @@ export const env = createEnv({
     NEXT_PUBLIC_AGENTS_API_URL: process.env.NEXT_PUBLIC_AGENTS_API_URL,
     NEXT_PUBLIC_SAMPLE_PROMPTS: process.env.NEXT_PUBLIC_SAMPLE_PROMPTS,
     NEXT_PUBLIC_ENABLE_UPLOAD: process.env.NEXT_PUBLIC_ENABLE_UPLOAD,
+    NEXT_PUBLIC_UPLOAD_ACCEPT: process.env.NEXT_PUBLIC_UPLOAD_ACCEPT,
+    NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB: process.env.NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB,
   },
   // Treat an empty-string env var (e.g. `NEXT_PUBLIC_CHAT_ENDPOINT_URL=` from a
   // docker-compose default) as unset, so an unconfigured deployment falls back to

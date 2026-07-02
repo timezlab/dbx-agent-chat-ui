@@ -33,6 +33,8 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
     agentsAvailable,
     samplePrompts,
     uploadEnabled,
+    uploadAccept,
+    uploadMaxSizeBytes,
   } = useChatContext();
   const todos = selectLatestTodos(messages);
   const firstPlanCallId = firstTodoWriteCallId(messages);
@@ -86,6 +88,8 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
           onSelectAgent={selectAgent}
           agentsAvailable={agentsAvailable}
           uploadEnabled={uploadEnabled}
+          uploadAccept={uploadAccept}
+          uploadMaxSizeBytes={uploadMaxSizeBytes}
         />
       </div>
     </div>

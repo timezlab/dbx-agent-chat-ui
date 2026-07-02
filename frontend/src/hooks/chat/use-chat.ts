@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
+  Attachment,
   CapabilityConfig,
   ChatRequestMessage,
   Conversation,
@@ -42,7 +43,7 @@ export interface UseChatResult {
   status: "idle" | "streaming";
   /** Readable inline notice when the chat endpoint is missing/unavailable (T055). */
   configError: string | null;
-  send: (text: string) => void;
+  send: (text: string, attachments?: Attachment[]) => void;
   /** Abort the active generation; partial output is kept and marked `stopped` (US2). */
   cancel: () => void;
   /** Start a fresh conversation and replace persisted state (no stale resurrection, US4). */
@@ -166,12 +167,17 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
   >(() => {});
 
   const makeUser = useCallback(
-    (text: string, status: Message["status"] = "complete"): Message => ({
+    (
+      text: string,
+      attachments: Attachment[] = [],
+      status: Message["status"] = "complete",
+    ): Message => ({
       id: generateId(),
       role: "user",
       parts: [{ type: "text", text }],
-      // "queued" while it waits behind an active generation (renders dimmed); the
-      // immediate send is "complete". Promoted to "complete" when it dispatches.
+      attachments,
+      // A real (dispatched) user turn is "complete". Still-queued turns are not built
+      // here — they live in `queue` and are rendered from there as pending bubbles.
       status,
       error: null,
       feedback: null,
@@ -185,6 +191,7 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
       id: generateId(),
       role: "assistant",
       parts: [],
+      attachments: [],
       status: "streaming",
       error: null,
       feedback: null,
@@ -213,42 +220,43 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
       });
 
       // Drain the queue: start the next pending generation, if any.
-      const { next: queuedText, queue } = dequeue(snapshot.queue);
-      if (queuedText == null) {
+      const { next: queuedMessage, queue } = dequeue(snapshot.queue);
+      if (queuedMessage == null) {
         if (snapshot.queue.length > 0) {
           setConversation((prev) => ({ ...prev, queue }));
         }
         return;
       }
 
+      // The dequeued turn now becomes a real message; `snapshot.messages` holds only
+      // already-dispatched turns, so history is exactly those + this one — later still-
+      // queued turns never leak into it. Attachments ride only on this dispatched turn
+      // (T071, bounded payload growth per send).
+      const user = makeUser(queuedMessage.text, queuedMessage.attachments);
       const assistant = makeAssistant();
-      // History = everything already present (the queued user message included).
-      const history: ChatRequestMessage[] = snapshot.messages.map((m) => ({
-        role: m.role,
-        content: flattenText(m),
+      const history: ChatRequestMessage[] = [
+        ...snapshot.messages.map((m) => ({
+          role: m.role,
+          content: flattenText(m),
+        })),
+        {
+          role: "user" as const,
+          content: queuedMessage.text,
+          ...(queuedMessage.attachments.length > 0
+            ? { attachments: queuedMessage.attachments }
+            : {}),
+        },
+      ];
+      setConversation((prev) => ({
+        ...prev,
+        queue,
+        messages: [...prev.messages, user, assistant],
+        activeId: assistant.id,
+        status: "streaming",
       }));
-      setConversation((prev) => {
-        // Promote the oldest still-queued user turn: it is now the one being sent, so
-        // it stops reading as pending (un-dims).
-        let promoted = false;
-        const messages = prev.messages.map((m) => {
-          if (!promoted && m.role === "user" && m.status === "queued") {
-            promoted = true;
-            return { ...m, status: "complete" as const };
-          }
-          return m;
-        });
-        return {
-          ...prev,
-          queue,
-          messages: [...messages, assistant],
-          activeId: assistant.id,
-          status: "streaming",
-        };
-      });
       beginGenerationRef.current(assistant.id, history);
     },
-    [makeAssistant],
+    [makeUser, makeAssistant],
   );
 
   const beginGeneration = useCallback(
@@ -328,29 +336,35 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
   );
 
   const send = useCallback(
-    (text: string) => {
-      if (isBlank(text)) return; // FR-002 — no empty bubble / request
+    (text: string, attachments: Attachment[] = []) => {
+      // FR-002 — no empty bubble/request. Attachments ride along with typed text; they
+      // don't stand alone (kept simple — T071 doesn't add an image-only send path).
+      if (isBlank(text)) return;
       const snapshot = conversationRef.current;
 
       if (snapshot.status === "streaming") {
-        // Queue behind the active generation; auto-dispatched on terminal. The bubble
-        // shows immediately but dimmed ("queued") until its turn to send.
+        // Queue behind the active generation; auto-dispatched on terminal. The pending
+        // bubble is derived from `queue` (dimmed, "queued") — the queued turn is NOT put
+        // into `messages`, which holds only turns already dispatched to the backend.
         setConversation((prev) => ({
           ...prev,
-          messages: [...prev.messages, makeUser(text, "queued")],
-          queue: enqueue(prev.queue, text),
+          queue: enqueue(prev.queue, generateId(), text, attachments),
         }));
         return;
       }
 
-      const user = makeUser(text);
+      const user = makeUser(text, attachments);
       const assistant = makeAssistant();
       const history: ChatRequestMessage[] = [
         ...snapshot.messages.map((m) => ({
           role: m.role,
           content: flattenText(m),
         })),
-        { role: "user" as const, content: text },
+        {
+          role: "user" as const,
+          content: text,
+          ...(attachments.length > 0 ? { attachments } : {}),
+        },
       ];
       setConversation((prev) => ({
         ...prev,
@@ -360,12 +374,34 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
       }));
       beginGeneration(assistant.id, history);
     },
-    [makeUser, makeAssistant, beginGeneration],
+    [makeUser, makeAssistant, beginGeneration, generateId],
+  );
+
+  // Render view: real messages followed by the still-queued turns as pending ("queued")
+  // bubbles. `queue` stays out of `conversation.messages` (which persists / feeds the
+  // backend history), so this derivation is the only place the two rejoin — for display.
+  const renderMessages = useMemo(
+    () => [
+      ...conversation.messages,
+      ...conversation.queue.map(
+        (q): Message => ({
+          id: q.id,
+          role: "user",
+          parts: [{ type: "text", text: q.text }],
+          attachments: q.attachments,
+          status: "queued",
+          error: null,
+          feedback: null,
+          createdAt: 0,
+        }),
+      ),
+    ],
+    [conversation.messages, conversation.queue],
   );
 
   return {
     conversation,
-    messages: conversation.messages,
+    messages: renderMessages,
     status: conversation.status,
     configError,
     send,

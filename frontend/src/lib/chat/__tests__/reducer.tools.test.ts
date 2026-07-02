@@ -11,6 +11,7 @@ function active(parts: MessagePart[] = []): Conversation {
         id: "a",
         role: "assistant",
         parts,
+        attachments: [],
         status: "streaming",
         error: null,
         feedback: null,

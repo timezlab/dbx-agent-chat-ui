@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { AttachmentSchema } from "./attachment";
 import { MessageRoleSchema } from "./message";
 
 /**
@@ -13,6 +14,10 @@ import { MessageRoleSchema } from "./message";
 export const ChatRequestMessageSchema = z.object({
   role: MessageRoleSchema,
   content: z.string(),
+  // Chỉ có mặt trên lượt ĐANG gửi (T071) — history cũ replay lại KHÔNG kèm attachments,
+  // tránh payload phình theo cấp số nhân mỗi lượt (xem databricks-research.md, giới hạn
+  // 16 MB/request của Model Serving).
+  attachments: z.array(AttachmentSchema).optional(),
 });
 export type ChatRequestMessage = z.infer<typeof ChatRequestMessageSchema>;
 

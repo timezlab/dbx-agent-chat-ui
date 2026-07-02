@@ -15,8 +15,14 @@ export const CapabilityConfigSchema = z.object({
   // NEXT_PUBLIC_SAMPLE_PROMPTS (JSON array chuỗi) — gợi ý hiển thị ở empty-state.
   // Optional (như mọi field khác); unset/không hợp lệ ⇒ coi như [] tại nơi tiêu thụ.
   samplePrompts: z.array(z.string()).optional(),
-  // NEXT_PUBLIC_ENABLE_UPLOAD — bật nút đính kèm ở composer. Optional; unset ⇒ false
-  // (upload vẫn deferred: khi bật chỉ là affordance, chưa xử lý file).
+  // NEXT_PUBLIC_ENABLE_UPLOAD — bật nút đính kèm ở composer. Optional; unset ⇒ false.
   uploadEnabled: z.boolean().optional(),
+  // NEXT_PUBLIC_UPLOAD_ACCEPT (T071) — danh sách mime pattern/extension cho phép, phân
+  // tách bởi dấu phẩy (vd "image/*,application/pdf,.csv"). Optional ở entity này (default
+  // "image/*" áp dụng tại lib/config.ts#parseUploadAccept khi đọc từ env thật).
+  uploadAccept: z.string().optional(),
+  // NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB (T071) — giới hạn dung lượng mỗi file, đơn vị MB.
+  // Optional; default áp dụng tại lib/config.ts#parseUploadMaxSizeMb.
+  uploadMaxSizeBytes: z.number().optional(),
 });
 export type CapabilityConfig = z.infer<typeof CapabilityConfigSchema>;

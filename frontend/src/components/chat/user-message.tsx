@@ -1,5 +1,5 @@
 import * as React from "react";
-import { UserIcon } from "lucide-react";
+import { PaperclipIcon, UserIcon } from "lucide-react";
 
 import type { Message } from "@/entities";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,12 @@ import {
   MessageAvatar,
   MessageContent,
 } from "@/components/ui/message";
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 /** Join a message's text parts (user turns are a single text part). */
 function textOf(message: Message): string {
@@ -47,6 +53,24 @@ export function UserMessage({ message, className, ...props }: UserMessageProps) 
         >
           {textOf(message)}
         </div>
+        {message.attachments.length > 0 ? (
+          <div
+            data-slot="user-message-attachments"
+            className="mt-1 flex w-fit max-w-[85%] flex-wrap justify-end gap-1.5 self-end"
+          >
+            {message.attachments.map((a) => (
+              <span
+                key={a.id}
+                data-slot="user-message-attachment"
+                className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground"
+              >
+                <PaperclipIcon className="size-3" />
+                <span className="max-w-40 truncate">{a.name}</span>
+                <span className="text-muted-foreground/70">{formatBytes(a.size)}</span>
+              </span>
+            ))}
+          </div>
+        ) : null}
       </MessageContent>
     </MessageRow>
   );

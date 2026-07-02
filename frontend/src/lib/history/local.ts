@@ -60,8 +60,33 @@ export function createLocalHistory(
       return result.success ? result.data : null;
     },
     async save(conversation: Conversation): Promise<void> {
-      writeRaw(JSON.stringify(conversation));
+      writeRaw(JSON.stringify(stripAttachmentData(conversation)));
     },
+  };
+}
+
+/**
+ * Attachments are session-only (T071): drop each `dataUrl` before writing to
+ * `localStorage` so base64 file bytes never sit in the browser's persistent storage
+ * (quota risk) or survive a reload. Chips still render from name/size/mimeType after
+ * restore — only the raw bytes are gone.
+ *
+ * `queue` is a transient send buffer, never persisted: it is empty whenever a turn
+ * settles (the point where `save` fires), and its items carry their own attachment
+ * bytes, so we drop it to `[]` outright rather than rely on that invariant holding.
+ */
+function stripAttachmentData(conversation: Conversation): Conversation {
+  return {
+    ...conversation,
+    queue: [],
+    messages: conversation.messages.map((m) =>
+      m.attachments.length === 0
+        ? m
+        : {
+            ...m,
+            attachments: m.attachments.map((a) => ({ ...a, dataUrl: "" })),
+          },
+    ),
   };
 }
 

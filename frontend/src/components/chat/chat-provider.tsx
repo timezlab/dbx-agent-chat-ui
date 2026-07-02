@@ -24,6 +24,10 @@ export interface ChatContextValue extends UseChatResult {
   samplePrompts: string[];
   /** Whether the composer's attach/upload affordance is enabled. */
   uploadEnabled: boolean;
+  /** File-picker accept list for the composer (T071). */
+  uploadAccept?: string;
+  /** Max size per attached file, in bytes (T071). */
+  uploadMaxSizeBytes?: number;
 }
 
 const ChatContext = React.createContext<ChatContextValue | null>(null);
@@ -55,6 +59,8 @@ export function ChatProvider({ config, children }: ChatProviderProps) {
     agentsAvailable: available,
     samplePrompts: config?.samplePrompts ?? [],
     uploadEnabled: config?.uploadEnabled ?? false,
+    uploadAccept: config?.uploadAccept,
+    uploadMaxSizeBytes: config?.uploadMaxSizeBytes,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

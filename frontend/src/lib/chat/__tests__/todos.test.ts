@@ -8,6 +8,7 @@ function assistantWithTools(id: string, items: ToolActivityItem[]): Message {
     id,
     role: "assistant",
     parts: [{ type: "tools", items }],
+    attachments: [],
     status: "complete",
     error: null,
     feedback: null,

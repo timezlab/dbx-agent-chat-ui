@@ -2,7 +2,11 @@ import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { CapabilityConfig } from "@/entities";
-import type { ChatStreamHandlers, ChatTransport } from "@/lib/chat/transport";
+import type {
+  ChatRequest,
+  ChatStreamHandlers,
+  ChatTransport,
+} from "@/lib/chat/transport";
 import { useChat } from "@/hooks/chat/use-chat";
 
 const config: CapabilityConfig = {
@@ -94,6 +98,37 @@ describe("useChat — cancel a generation (US2)", () => {
         m.parts[0].text === "second",
     );
     expect(promoted?.status).toBe("complete");
+  });
+
+  it("dispatched history for a queued turn excludes later still-queued turns (T071 leak fix)", () => {
+    const inputs: ChatRequest[] = [];
+    const state = { handlers: null as ChatStreamHandlers | null };
+    const transport: ChatTransport = {
+      send: (input, handlers) => {
+        inputs.push(input);
+        state.handlers = handlers;
+        return new AbortController();
+      },
+    };
+    const { result } = renderHook(() => useChat({ config, transport }));
+
+    // "first" dispatches; while it streams, "A" then "B" are both queued.
+    act(() => result.current.send("first"));
+    act(() => state.handlers!.onEvent({ type: "token", delta: "reply-1" }));
+    act(() => result.current.send("A"));
+    act(() => result.current.send("B"));
+
+    // First generation closes → "A" dispatches. Its history is [first, reply-1, A] —
+    // "B" (still queued) must NOT leak into it.
+    act(() => {
+      state.handlers!.onEvent({ type: "done" });
+      state.handlers!.onClose?.("done");
+    });
+
+    expect(inputs).toHaveLength(2);
+    const dispatchA = inputs[1].messages;
+    expect(dispatchA.map((m) => m.content)).toEqual(["first", "reply-1", "A"]);
+    expect(dispatchA.some((m) => m.content === "B")).toBe(false);
   });
 
   it("a message queued behind the cancelled one is not dropped — it dispatches next", () => {
