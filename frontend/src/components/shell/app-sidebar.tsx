@@ -5,8 +5,9 @@ import { MessageSquareIcon, PlusIcon, BookIcon } from "lucide-react";
 import { useOverlayScrollbars } from "overlayscrollbars-react";
 import { Logo } from "@/components/logo";
 
-import type { CapabilityConfig, Conversation } from "@/entities";
+import type { CapabilityConfig } from "@/entities";
 import { useChatContext } from "@/components/chat/chat-provider";
+import { conversationTitle } from "@/lib/history/summary";
 import {
   Sidebar,
   SidebarContent,
@@ -26,27 +27,24 @@ export interface AppSidebarProps {
   config: CapabilityConfig;
 }
 
-/** First user line → conversation label; empty session → "New chat". */
-function conversationTitle(conversation: Conversation): string {
-  const firstUser = conversation.messages.find((m) => m.role === "user");
-  const text = firstUser?.parts
-    .map((p) => (p.type === "text" ? p.text : ""))
-    .join("")
-    .trim();
-  if (!text) return "New chat";
-  return text.length > 40 ? `${text.slice(0, 40)}…` : text;
-}
-
 /**
- * App chrome: brand, a "New chat" action, and the active conversation. Only the
- * single persisted conversation is shown — a multi-conversation history list is a
- * deferred non-goal (needs a backend list API; `HistoryProvider` persists one
- * conversation). Collapses to an icon rail; settings live in the footer.
+ * App chrome: brand, a "New chat" action, and the history list. The active conversation
+ * sits at the top of the list (highlighted) with any past conversations below it; each
+ * past row opens that conversation via `selectConversation`. The list is read from
+ * `HistoryProvider` (backend when configured, else localStorage). Collapses to an icon
+ * rail; settings live in the footer.
  */
 export function AppSidebar({ config }: AppSidebarProps) {
-  const { conversation, newConversation } = useChatContext();
-  const title = conversationTitle(conversation);
+  const { conversation, conversations, newConversation, selectConversation } =
+    useChatContext();
+  const currentTitle = conversationTitle(conversation);
   const hasTurns = conversation.messages.length > 0;
+  // Saved rows keep their natural (newest-first) position; the active one is just
+  // highlighted in place — selecting a conversation must NOT hoist it to the top.
+  const inList = conversations.some((c) => c.id === conversation.id);
+  // A live conversation that isn't saved yet (mid first turn) gets a temporary top row.
+  const showCurrentRow = hasTurns && !inList;
+  const showHistory = showCurrentRow || conversations.length > 0;
 
   // Overlay scrollbars on the sidebar's scroll region. SidebarContent lives in
   // `components/ui` (kept pristine) and already hides the native bar (`no-scrollbar`), so we
@@ -113,18 +111,32 @@ export function AppSidebar({ config }: AppSidebarProps) {
           </SidebarMenu>
         </SidebarGroup>
 
-        {hasTurns ? (
+        {showHistory ? (
           <SidebarGroup>
             <SidebarGroupLabel className="group-data-[collapsible=icon]:-mt-10">
-              Conversation
+              History
             </SidebarGroupLabel>
             <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton isActive tooltip={title}>
-                  <MessageSquareIcon />
-                  <span className="truncate">{title}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {showCurrentRow ? (
+                <SidebarMenuItem>
+                  <SidebarMenuButton isActive tooltip={currentTitle}>
+                    <MessageSquareIcon />
+                    <span className="truncate">{currentTitle}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ) : null}
+              {conversations.map((c) => (
+                <SidebarMenuItem key={c.id}>
+                  <SidebarMenuButton
+                    isActive={c.id === conversation.id}
+                    tooltip={c.title}
+                    onClick={() => selectConversation(c.id)}
+                  >
+                    <MessageSquareIcon />
+                    <span className="truncate">{c.title}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
             </SidebarMenu>
           </SidebarGroup>
         ) : null}

@@ -1,6 +1,13 @@
-import { type Conversation, ConversationSchema } from "@/entities";
+import { z } from "zod";
+
+import {
+  type Conversation,
+  ConversationSchema,
+  type ConversationSummary,
+} from "@/entities";
 
 import type { HistoryProvider } from "./provider";
+import { summarizeConversation } from "./summary";
 
 /** Minimal `localStorage`-shaped surface (injectable for tests). */
 export interface StorageLike {
@@ -9,7 +16,9 @@ export interface StorageLike {
   removeItem(key: string): void;
 }
 
-const DEFAULT_KEY = "dbx-agent-chat-ui:conversation";
+// Bumped from the old single-conversation key (`:conversation`) — the store now holds
+// a map of conversations by id, so a stale singular payload is simply ignored.
+const DEFAULT_KEY = "dbx-agent-chat-ui:conversations";
 
 export interface LocalHistoryOptions {
   key?: string;
@@ -17,11 +26,17 @@ export interface LocalHistoryOptions {
   storage?: StorageLike;
 }
 
+/** On-disk shape: conversations keyed by id (order derived from `updatedAt`). */
+const StoreSchema = z.record(z.string(), ConversationSchema);
+type Store = Record<string, Conversation>;
+
 /**
- * `localStorage`-backed history (FR-018..FR-020). When storage is unavailable or
- * throws (private mode / disabled, FR-023) it degrades to an in-memory map, so
- * persistence silently no-ops across reloads rather than crashing the session.
- * Corrupt or schema-invalid data restores as a clean session (`load → null`).
+ * `localStorage`-backed multi-conversation history (FR-018..FR-020). Stores every
+ * conversation keyed by id; `list()` derives sidebar summaries and `load(id)` returns
+ * one (or the most recent when `id` is omitted). When storage is unavailable or throws
+ * (private mode / disabled, FR-023) it degrades to an in-memory map, so persistence
+ * silently no-ops across reloads rather than crashing the session. Corrupt or
+ * schema-invalid data restores as an empty store.
  */
 export function createLocalHistory(
   options: LocalHistoryOptions = {},
@@ -46,23 +61,49 @@ export function createLocalHistory(
     }
   };
 
+  const readStore = (): Store => {
+    const raw = readRaw();
+    if (!raw) return {};
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return {}; // corrupt JSON → empty store
+    }
+    const result = StoreSchema.safeParse(parsed);
+    return result.success ? result.data : {};
+  };
+
+  /** All conversations, newest-first by last-turn time. */
+  const orderedConversations = (): Conversation[] =>
+    Object.values(readStore()).sort(
+      (a, b) => lastTurnAt(b) - lastTurnAt(a),
+    );
+
   return {
-    async load(): Promise<Conversation | null> {
-      const raw = readRaw();
-      if (!raw) return null;
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(raw);
-      } catch {
-        return null; // corrupt JSON → clean session
-      }
-      const result = ConversationSchema.safeParse(parsed);
-      return result.success ? result.data : null;
+    async list(): Promise<ConversationSummary[]> {
+      return orderedConversations().map(summarizeConversation);
+    },
+    async load(id?: string): Promise<Conversation | null> {
+      const conversations = orderedConversations();
+      if (id) return conversations.find((c) => c.id === id) ?? null;
+      return conversations[0] ?? null; // most recent
     },
     async save(conversation: Conversation): Promise<void> {
-      writeRaw(JSON.stringify(stripAttachmentData(conversation)));
+      // Don't persist an empty session — a brand-new "New chat" shouldn't create a
+      // ghost row in the sidebar list before the user has said anything.
+      if (conversation.messages.length === 0) return;
+      const store = readStore();
+      store[conversation.id] = stripAttachmentData(conversation);
+      writeRaw(JSON.stringify(store));
     },
   };
+}
+
+/** Last turn's `createdAt` (0 for an empty conversation) — the sort/`updatedAt` key. */
+function lastTurnAt(conversation: Conversation): number {
+  const last = conversation.messages[conversation.messages.length - 1];
+  return last?.createdAt ?? 0;
 }
 
 /**

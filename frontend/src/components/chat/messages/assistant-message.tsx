@@ -168,7 +168,8 @@ export function AssistantMessage({
         {showFeedback ? (
           <FeedbackPanel
             messageId={message.id}
-            value={message.feedback}
+            value={message.feedback?.rating ?? null}
+            comment={message.feedback?.comment}
             onSubmit={onFeedback}
             className="mt-1"
           />

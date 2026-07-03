@@ -14,6 +14,7 @@ import { TransportSection } from "./sections/transport";
 import { DevToolsSection } from "./sections/dev-tools";
 import { BuiltinToolsSection } from "./sections/builtin-tools";
 import { BackendIntegrationSection } from "./sections/backend-integration";
+import { ApiDocsSection } from "./sections/api-docs";
 import { CustomizationSection } from "./sections/customization";
 import { DocsFooter } from "./sections/footer";
 
@@ -26,6 +27,7 @@ const SECTIONS = [
   DevToolsSection,
   BuiltinToolsSection,
   BackendIntegrationSection,
+  ApiDocsSection,
   CustomizationSection,
 ];
 

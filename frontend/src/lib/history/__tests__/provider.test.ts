@@ -14,6 +14,7 @@ const sample: Conversation = {
 
 function spyProvider(over: Partial<HistoryProvider> = {}): HistoryProvider {
   return {
+    list: vi.fn(async () => []),
     load: vi.fn(async () => null),
     save: vi.fn(async () => {}),
     ...over,
@@ -29,8 +30,10 @@ describe("resolveHistory (US4)", () => {
       { makeLocal: () => local, makeRemote },
     );
     await provider.load();
+    await provider.list();
     expect(makeRemote).not.toHaveBeenCalled();
     expect(local.load).toHaveBeenCalled();
+    expect(local.list).toHaveBeenCalled();
   });
 
   it("fails over to local when the remote load throws", async () => {
@@ -45,25 +48,42 @@ describe("resolveHistory (US4)", () => {
       { makeLocal: () => local, makeRemote: () => remote },
     );
 
-    expect(await provider.load()).toEqual(sample);
+    expect(await provider.load("c1")).toEqual(sample);
     expect(remote.load).toHaveBeenCalled();
     expect(local.load).toHaveBeenCalled();
   });
 
-  it("fails over to local when the remote save throws", async () => {
+  it("fails over to local when the remote list throws", async () => {
     const remote = spyProvider({
-      save: vi.fn(async () => {
+      list: vi.fn(async () => {
         throw new Error("network");
       }),
     });
+    const summaries = [
+      { id: "c1", title: "hi", updatedAt: 2, messageCount: 1 },
+    ];
+    const local = spyProvider({ list: vi.fn(async () => summaries) });
+    const provider = resolveHistory(
+      { historyUrl: "https://h.example" },
+      { makeLocal: () => local, makeRemote: () => remote },
+    );
+
+    expect(await provider.list()).toEqual(summaries);
+    expect(remote.list).toHaveBeenCalled();
+    expect(local.list).toHaveBeenCalled();
+  });
+
+  it("writes only to local — the backend owns remote persistence", async () => {
+    const remote = spyProvider();
     const local = spyProvider();
     const provider = resolveHistory(
       { historyUrl: "https://h.example" },
       { makeLocal: () => local, makeRemote: () => remote },
     );
 
-    await expect(provider.save(sample)).resolves.toBeUndefined();
-    expect(remote.save).toHaveBeenCalled();
+    await provider.save(sample);
+    // The UI never PUTs history; it keeps a local cache and lets the backend record.
+    expect(remote.save).not.toHaveBeenCalled();
     expect(local.save).toHaveBeenCalledWith(sample);
   });
 });

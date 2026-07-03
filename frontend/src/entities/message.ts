@@ -1,6 +1,20 @@
 import { z } from "zod";
 
 import { AttachmentSchema } from "./attachment";
+import { FeedbackRatingSchema } from "./feedback";
+
+/**
+ * Feedback stored inline on an assistant turn (D10). Carries the full submission — the
+ * up/down rating plus the optional free-text comment — so it round-trips through history
+ * (persisted in `Conversation.messages[]`) instead of being lost after submit. `null` ⇒
+ * no rating yet.
+ */
+export const MessageFeedbackSchema = z.object({
+  rating: FeedbackRatingSchema, // "up" | "down"
+  comment: z.string().optional(), // free-text; kept across a later rating-only re-submit
+  submittedAt: z.number().optional(), // epoch ms of the last submit
+});
+export type MessageFeedback = z.infer<typeof MessageFeedbackSchema>;
 
 /** Vai trò 1 turn hội thoại. */
 export const MessageRoleSchema = z.enum(["user", "assistant"]);
@@ -90,7 +104,7 @@ export const MessageSchema = z.object({
   attachments: z.array(AttachmentSchema),
   status: MessageStatusSchema,
   error: z.string().nullable(), // chỉ assistant; set khi có error frame
-  feedback: z.enum(["up", "down"]).nullable(), // chỉ assistant; 1 lựa chọn hiện tại
+  feedback: MessageFeedbackSchema.nullable(), // chỉ assistant; rating + comment đã lưu
   createdAt: z.number(), // thứ tự theo session (clock inject, không Date.now trong pure code)
 });
 export type Message = z.infer<typeof MessageSchema>;

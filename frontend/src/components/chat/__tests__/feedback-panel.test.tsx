@@ -21,6 +21,19 @@ describe("FeedbackPanel (US3)", () => {
     ).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("shows a saved comment when the reply already has feedback (restored)", () => {
+    render(
+      <FeedbackPanel
+        messageId="m1"
+        value="up"
+        comment="loved it"
+        onSubmit={vi.fn()}
+      />,
+    );
+    // The comment box is revealed on mount (a rating exists) and seeded with the note.
+    expect(screen.getByLabelText("Feedback comment")).toHaveValue("loved it");
+  });
+
   it("keeps the selection and shows a notice when submit rejects (non-blocking)", async () => {
     const onSubmit = vi.fn(() => Promise.reject(new Error("network")));
     render(<FeedbackPanel messageId="m1" value="up" onSubmit={onSubmit} />);

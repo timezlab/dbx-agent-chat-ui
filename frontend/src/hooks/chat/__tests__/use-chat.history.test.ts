@@ -43,6 +43,9 @@ const restored: Conversation = {
 describe("useChat — history persistence (US4)", () => {
   it("hydrates a pristine session from persisted history on startup", async () => {
     const history: HistoryProvider = {
+      list: vi.fn(async () => [
+        { id: "restored", title: "earlier", updatedAt: 1, messageCount: 1 },
+      ]),
       load: vi.fn(async () => restored),
       save: vi.fn(async () => {}),
     };
@@ -62,6 +65,7 @@ describe("useChat — history persistence (US4)", () => {
 
   it("saves the conversation on a terminal turn transition", async () => {
     const history: HistoryProvider = {
+      list: vi.fn(async () => []),
       load: vi.fn(async () => null),
       save: vi.fn(async () => {}),
     };
@@ -81,8 +85,9 @@ describe("useChat — history persistence (US4)", () => {
     expect(saved.messages.some((m) => m.role === "assistant")).toBe(true);
   });
 
-  it("newConversation clears state and replaces persisted history", async () => {
+  it("newConversation clears state without persisting an empty session", async () => {
     const history: HistoryProvider = {
+      list: vi.fn(async () => []),
       load: vi.fn(async () => null),
       save: vi.fn(async () => {}),
     };
@@ -94,13 +99,54 @@ describe("useChat — history persistence (US4)", () => {
     act(() => result.current.send("hi"));
     act(() => state.handlers!.onEvent({ type: "done" }));
     expect(result.current.messages.length).toBeGreaterThan(0);
+    const savesBefore = (history.save as ReturnType<typeof vi.fn>).mock.calls
+      .length;
 
     act(() => result.current.newConversation());
     expect(result.current.messages).toHaveLength(0);
+    // The fresh empty conversation is NOT saved (no ghost row) and existing saved
+    // history is left untouched — no new save call beyond the terminal transition.
+    expect(
+      (history.save as ReturnType<typeof vi.fn>).mock.calls.length,
+    ).toBe(savesBefore);
+  });
 
-    const lastSave = (history.save as ReturnType<typeof vi.fn>).mock.calls.at(
-      -1,
-    )![0] as Conversation;
-    expect(lastSave.messages).toHaveLength(0);
+  it("lists past conversations and opens one via selectConversation", async () => {
+    const other: Conversation = {
+      ...restored,
+      id: "other",
+      messages: [
+        {
+          ...restored.messages[0],
+          id: "o1",
+          parts: [{ type: "text", text: "the other one" }],
+        },
+      ],
+    };
+    const history: HistoryProvider = {
+      list: vi.fn(async () => [
+        { id: "restored", title: "earlier", updatedAt: 2, messageCount: 1 },
+        { id: "other", title: "the other one", updatedAt: 1, messageCount: 1 },
+      ]),
+      load: vi.fn(async (id?: string) =>
+        id === "other" ? other : restored,
+      ),
+      save: vi.fn(async () => {}),
+    };
+    const { transport } = controllable();
+    const { result } = renderHook(() =>
+      useChat({ config, transport, history }),
+    );
+
+    await waitFor(() => expect(result.current.conversations).toHaveLength(2));
+
+    act(() => result.current.selectConversation("other"));
+    await waitFor(() =>
+      expect(result.current.conversation.id).toBe("other"),
+    );
+    expect(result.current.messages[0].parts[0]).toEqual({
+      type: "text",
+      text: "the other one",
+    });
   });
 });

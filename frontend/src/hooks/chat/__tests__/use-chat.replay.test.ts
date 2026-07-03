@@ -22,7 +22,11 @@ function controllable() {
 }
 
 function makeHistory(): HistoryProvider {
-  return { load: vi.fn(async () => null), save: vi.fn(async () => {}) };
+  return {
+    list: vi.fn(async () => []),
+    load: vi.fn(async () => null),
+    save: vi.fn(async () => {}),
+  };
 }
 
 const smallRecording =

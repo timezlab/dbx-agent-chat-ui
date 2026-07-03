@@ -123,6 +123,37 @@ describe("local history provider (US4)", () => {
     expect(restored?.queue).toEqual([]);
   });
 
+  it("stores multiple conversations: list is newest-first, load(id) opens one", async () => {
+    const provider = createLocalHistory({ key: "k", storage: memStorage() });
+    const older: Conversation = {
+      ...sample,
+      id: "older",
+      messages: [{ ...sample.messages[0], id: "o1", createdAt: 1 }],
+    };
+    const newer: Conversation = {
+      ...sample,
+      id: "newer",
+      messages: [
+        { ...sample.messages[0], id: "n1", createdAt: 9, parts: [{ type: "text", text: "newer" }] },
+      ],
+    };
+    await provider.save(older);
+    await provider.save(newer);
+
+    const list = await provider.list();
+    expect(list.map((c) => c.id)).toEqual(["newer", "older"]); // newest-first
+    expect(await provider.load("older")).toEqual(older);
+    expect((await provider.load())?.id).toBe("newer"); // most recent by default
+  });
+
+  it("does not persist an empty conversation (no ghost sidebar row)", async () => {
+    const provider = createLocalHistory({ key: "k", storage: memStorage() });
+    const empty: Conversation = { ...sample, id: "empty", messages: [] };
+    await provider.save(empty);
+    expect(await provider.list()).toEqual([]);
+    expect(await provider.load("empty")).toBeNull();
+  });
+
   it("degrades to in-memory when storage throws (private mode)", async () => {
     const throwing: StorageLike = {
       getItem() {

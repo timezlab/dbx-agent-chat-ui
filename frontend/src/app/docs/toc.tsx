@@ -13,6 +13,7 @@ const SECTIONS = [
   { id: "dev-tools", label: "Dev Tools" },
   { id: "builtin-tools", label: "Tool Rendering & Skills" },
   { id: "backend-integration", label: "Backend Integration Guide" },
+  { id: "api-docs", label: "API Reference" },
   { id: "customization", label: "Customization & Theming" },
 ];
 

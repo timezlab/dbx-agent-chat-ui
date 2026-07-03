@@ -11,8 +11,10 @@ import { Textarea } from "@/components/ui/textarea";
 export interface FeedbackPanelProps
   extends Omit<React.ComponentProps<"div">, "onSubmit"> {
   messageId: string;
-  /** Current selection (single choice), typically `message.feedback`. */
+  /** Current selection (single choice), typically `message.feedback?.rating`. */
   value?: FeedbackRating | null;
+  /** Previously-saved comment (`message.feedback?.comment`) to seed the textarea with. */
+  comment?: string;
   /** Submit to the resolved sink. Rejection is non-blocking; the selection is kept. */
   onSubmit: (feedback: Feedback) => void | Promise<void>;
 }
@@ -25,12 +27,15 @@ export interface FeedbackPanelProps
 export function FeedbackPanel({
   messageId,
   value = null,
+  comment: savedComment,
   onSubmit,
   className,
   ...props
 }: FeedbackPanelProps) {
-  const [comment, setComment] = React.useState("");
-  const [showComment, setShowComment] = React.useState(false);
+  const [comment, setComment] = React.useState(savedComment ?? "");
+  // Reveal the comment box immediately when a rating already exists (e.g. feedback
+  // restored from history), so the saved comment is visible without re-clicking.
+  const [showComment, setShowComment] = React.useState(value != null);
   const [error, setError] = React.useState<string | null>(null);
 
   const submit = (rating: FeedbackRating, withComment?: string) => {

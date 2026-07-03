@@ -8,6 +8,7 @@ import type {
   CapabilityConfig,
   ChatRequestMessage,
   Conversation,
+  ConversationSummary,
   Message,
 } from "@/entities";
 import { resolveConfig, isChatEndpointMissing } from "@/lib/config";
@@ -66,11 +67,15 @@ export interface UseChatResult {
   status: "idle" | "streaming";
   /** Readable inline notice when the chat endpoint is missing/unavailable (T055). */
   configError: string | null;
+  /** Past conversations for the sidebar history list, newest-first (read-only). */
+  conversations: ConversationSummary[];
   send: (text: string, attachments?: Attachment[]) => void;
   /** Abort the active generation; partial output is kept and marked `stopped` (US2). */
   cancel: () => void;
-  /** Start a fresh conversation and replace persisted state (no stale resurrection, US4). */
+  /** Start a fresh, empty conversation (leaves saved history untouched, US4). */
   newConversation: () => void;
+  /** Open a past conversation by id (aborts any active generation first). */
+  selectConversation: (id: string) => void;
   /** Submit feedback for a reply; optimistically reflects the selection (US3). */
   submitFeedback: (feedback: Feedback) => Promise<void>;
 
@@ -159,6 +164,9 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
     status: "idle",
   }));
 
+  // Sidebar history list (summaries only). Refreshed on startup and after each save.
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+
   // --- Replay state (feature 002). Ephemeral; the recording text lives in a ref so a
   // multi-MB upload never sits in React state / triggers renders. ---
   const [replayMode, setReplayMode] = useState(false);
@@ -194,14 +202,22 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
     if (loadedRef.current) return;
     loadedRef.current = true;
     let cancelled = false;
-    void history.load().then((restored) => {
+    void (async () => {
+      const list = await history.list().catch(() => []);
+      if (cancelled) return;
+      setConversations(list);
+      // Restore the most recent conversation into a still-pristine session (never
+      // clobber a chat the user already started while the async load was in flight).
+      const restored = list.length
+        ? await history.load(list[0].id).catch(() => null)
+        : await history.load().catch(() => null);
       if (cancelled || !restored) return;
       setConversation((prev) =>
         prev.messages.length === 0 && prev.status === "idle" && !prev.activeId
           ? restored
           : prev,
       );
-    });
+    })();
     return () => {
       cancelled = true;
     };
@@ -221,7 +237,13 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
       // is a client-only, non-resurrecting playback.
       !replayModeRef.current
     ) {
-      void history.save(conversation);
+      // Persist, then refresh the sidebar list so the just-settled turn shows up (new
+      // conversation) or moves to the top (updated one).
+      void history
+        .save(conversation)
+        .then(() => history.list())
+        .then(setConversations)
+        .catch(() => {});
     }
   }, [conversation, history]);
 
@@ -391,17 +413,28 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
 
   const newConversation = useCallback(() => {
     controllerRef.current?.abort();
-    const fresh: Conversation = {
+    // A fresh, empty session with a new id. We don't persist it (an empty conversation
+    // isn't saved) and we leave every other saved conversation untouched — the prior
+    // one was already persisted on its terminal transition.
+    setConversation({
       id: generateId(),
       messages: [],
       activeId: null,
       queue: [],
       status: "idle",
-    };
-    setConversation(fresh);
-    // Replace persisted state so a reload doesn't resurrect the old conversation.
-    void history.save(fresh);
-  }, [generateId, history]);
+    });
+  }, [generateId]);
+
+  const selectConversation = useCallback(
+    (id: string) => {
+      if (id === conversationRef.current.id) return; // already open
+      controllerRef.current?.abort();
+      void history.load(id).then((restored) => {
+        if (restored) setConversation(restored);
+      });
+    },
+    [history],
+  );
 
   const submitFeedback = useCallback(
     (feedback: Feedback): Promise<void> => {
@@ -410,7 +443,18 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
       setConversation((prev) => ({
         ...prev,
         messages: prev.messages.map((m) =>
-          m.id === feedback.messageId ? { ...m, feedback: feedback.rating } : m,
+          m.id === feedback.messageId
+            ? {
+                ...m,
+                feedback: {
+                  rating: feedback.rating,
+                  // Keep any prior comment when this submit is rating-only (the panel
+                  // sends the rating first, then the comment as a second call).
+                  comment: feedback.comment ?? m.feedback?.comment,
+                  submittedAt: Date.now(),
+                },
+              }
+            : m,
         ),
       }));
       return feedbackSink.submit(feedback);
@@ -631,9 +675,11 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
     messages: renderMessages,
     status: conversation.status,
     configError,
+    conversations,
     send,
     cancel,
     newConversation,
+    selectConversation,
     submitFeedback,
     replayMode,
     toggleReplayMode,

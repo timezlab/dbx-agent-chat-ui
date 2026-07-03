@@ -437,3 +437,30 @@ Add US2 → US4 → US3 → US5, each tested independently and deployable, witho
   `.dev.ts` gated out of the static export; needs `export const dynamic = "force-static"`
   because a bare `GET` under `output: export` must be statically renderable — unlike the POST
   chat mock). Default `.env` points `/api/me` at it.
+- **Multi-conversation history + per-message feedback + API reference docs (2026-07-03)**:
+  Reworked history into a **read-only, multi-conversation** capability and made feedback
+  persist *on the message*. (1) `Message.feedback` changed from a bare `"up"|"down"|null`
+  enum to a `MessageFeedbackSchema` object (`{ rating, comment?, submittedAt? }`), so the
+  free-text comment now round-trips through history instead of being lost after submit;
+  `use-chat › submitFeedback` writes the full object (keeping a prior comment on a
+  rating-only re-submit) and `FeedbackPanel` seeds/reveals the saved comment on restore.
+  (2) `HistoryProvider` port is now `list()` + `load(id?)` + `save()`: `entities/
+  conversation.ts` adds `ConversationSummarySchema` (`{ id, title, updatedAt, messageCount }`);
+  `lib/history/summary.ts` derives titles/summaries; `remote.ts` is read-only (`GET {url}` →
+  `{ conversations: Summary[] }`, `GET {url}/{id}` → `{ conversation }`, `save` is a no-op —
+  **the backend owns writes**); `local.ts` stores conversations keyed by id in localStorage
+  (multi), never persisting an empty session; the failover wrapper keeps a local cache even
+  with a backend configured. (3) `use-chat` loads the list on startup, hydrates the most
+  recent into a pristine session, and exposes `conversations` + `selectConversation(id)`;
+  `newConversation` no longer wipes/saves. `app-sidebar.tsx` renders the list — active row
+  highlighted **in place** (selecting must not hoist a conversation to the top), a live
+  unsaved chat gets a temporary top row until its first save. (4) Dev mocks (`.dev.ts`, gated
+  out of the export): `app/api/history/route.dev.ts` (list, `force-static`),
+  `app/api/history/[conversationId]/route.dev.ts` (detail; dynamic segment needs
+  `generateStaticParams` + `force-static` under `output: export`),
+  `app/api/feedback/route.dev.ts` (POST sink, no `force-static`), sharing seeded data in
+  `mock-conversations.dev.ts` (messages carry inline feedback to demo the round-trip). (5)
+  New docs section `sections/api-docs.tsx` ("API Reference") documents the expected
+  request/response format for every endpoint (chat SSE, history list/detail, feedback,
+  agents, me), registered in `docs-content.tsx` + `toc.tsx`. Default `.env` already points
+  `/api/history` + `/api/feedback` at the mocks.

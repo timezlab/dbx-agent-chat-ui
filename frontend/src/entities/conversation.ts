@@ -31,3 +31,16 @@ export const ConversationSchema = z.object({
   status: ConversationStatusSchema,
 });
 export type Conversation = z.infer<typeof ConversationSchema>;
+
+/**
+ * Lightweight row for the sidebar history list — enough to render + select a past
+ * conversation without shipping every message. The full turns are fetched on demand
+ * (`HistoryProvider.load(id)`) when the user opens one.
+ */
+export const ConversationSummarySchema = z.object({
+  id: z.string(),
+  title: z.string(), // dòng user đầu tiên (hoặc "New chat")
+  updatedAt: z.number(), // epoch ms của lượt cuối; dùng để sắp xếp mới → cũ
+  messageCount: z.number(), // số lượt đã gửi/nhận
+});
+export type ConversationSummary = z.infer<typeof ConversationSummarySchema>;
