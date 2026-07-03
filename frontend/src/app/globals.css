@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "overlayscrollbars/overlayscrollbars.css";
 
 /*
  * Streamdown renders markdown with its own Tailwind utility classes (heading sizes,
@@ -21,12 +22,14 @@
      browser's default serif (Times New Roman) in an embed/offline build. The fallback
      inside var() matters: an unset var with no fallback would invalidate the whole
      declaration. */
-  --font-sans: var(--font-sans, ui-sans-serif), ui-sans-serif, system-ui,
-    -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-sans:
+    var(--font-sans, ui-sans-serif), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, Arial, sans-serif;
   /* Inter is the single UI face; code/paths fall back to the platform monospace
      stack (Geist Mono was removed — no second webfont to ship). */
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
-    "Liberation Mono", monospace;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -78,7 +81,7 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
   /* Accent = indigo / electric blue (single locked accent, desaturated, AA on white). */
-  --primary: oklch(0.55 0.20 264);
+  --primary: oklch(0.55 0.2 264);
   --primary-foreground: oklch(0.985 0.01 264);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -89,12 +92,12 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.55 0.20 264);
+  --ring: oklch(0.55 0.2 264);
   /* Semantic state (running reuses the indigo accent). */
   --good: oklch(0.62 0.15 150);
   --warn: oklch(0.68 0.14 72);
   --crit: oklch(0.577 0.245 27.325);
-  --running: oklch(0.55 0.20 264);
+  --running: oklch(0.55 0.2 264);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -103,12 +106,12 @@
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.55 0.20 264);
+  --sidebar-primary: oklch(0.55 0.2 264);
   --sidebar-primary-foreground: oklch(0.985 0.01 264);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.235 0.04 264);
   --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.55 0.20 264);
+  --sidebar-ring: oklch(0.55 0.2 264);
 }
 
 .dark {
@@ -132,7 +135,7 @@
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.68 0.17 264);
   --good: oklch(0.72 0.15 155);
-  --warn: oklch(0.80 0.13 80);
+  --warn: oklch(0.8 0.13 80);
   --crit: oklch(0.704 0.191 22.216);
   --running: oklch(0.68 0.17 264);
   --chart-1: oklch(0.87 0 0);
@@ -187,4 +190,31 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   background-color: var(--muted-foreground);
+}
+
+/* OverlayScrollbars theme: thin, muted, auto-hiding overlay bars that reserve NO layout
+   width (so scrolled columns stay centered). Colors derive from --muted-foreground, so it
+   tracks light/dark automatically without extra tokens. Applied via the `os-theme-tz`
+   theme name passed to OverlayScrollbars instances. */
+.os-theme-tz {
+  --os-size: 8px;
+  --os-padding-perpendicular: 1px;
+  --os-padding-axis: 2px;
+  --os-track-bg: transparent;
+  --os-track-bg-hover: transparent;
+  --os-track-bg-active: transparent;
+  --os-handle-border-radius: 9999px;
+  --os-handle-bg: color-mix(in oklab, var(--muted-foreground) 40%, transparent);
+  --os-handle-bg-hover: color-mix(
+    in oklab,
+    var(--muted-foreground) 60%,
+    transparent
+  );
+  --os-handle-bg-active: color-mix(
+    in oklab,
+    var(--muted-foreground) 75%,
+    transparent
+  );
+  --os-handle-min-size: 28px;
+  --os-handle-interactive-area-offset: 4px;
 }

@@ -6,7 +6,7 @@ import { TriangleAlertIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { firstTodoWriteCallId, selectLatestTodos } from "@/lib/chat/todos";
 import { useChatContext } from "./chat-provider";
-import { MessageList } from "./message-list";
+import { MessageList } from "./messages/message-list";
 import { ChatComposer } from "./chat-composer";
 import { ReplayControl } from "./replay-control";
 import { ChatEmpty } from "./chat-empty";

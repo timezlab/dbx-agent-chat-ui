@@ -1,6 +1,8 @@
 "use client";
 
+import * as React from "react";
 import { MessageSquareIcon, PlusIcon, BookIcon } from "lucide-react";
+import { useOverlayScrollbars } from "overlayscrollbars-react";
 import { Logo } from "@/components/logo";
 
 import type { CapabilityConfig, Conversation } from "@/entities";
@@ -44,6 +46,26 @@ export function AppSidebar({ config }: AppSidebarProps) {
   const { conversation, newConversation } = useChatContext();
   const title = conversationTitle(conversation);
   const hasTurns = conversation.messages.length > 0;
+
+  // Overlay scrollbars on the sidebar's scroll region. SidebarContent lives in
+  // `components/ui` (kept pristine) and already hides the native bar (`no-scrollbar`), so we
+  // attach OverlayScrollbars to its element by `data-slot` and use it AS the viewport —
+  // native scroll preserved, overlay bar drawn on top (themed `os-theme-tz`).
+  const [initialize, getInstance] = useOverlayScrollbars({
+    defer: true,
+    options: {
+      scrollbars: { theme: "os-theme-tz", autoHide: "never" },
+      overflow: { x: "hidden", y: "scroll" },
+    },
+  });
+  React.useEffect(() => {
+    const el = document.querySelector<HTMLElement>(
+      '[data-slot="sidebar-content"]',
+    );
+    if (!el) return;
+    initialize({ target: el, elements: { viewport: el, content: false } });
+    return () => getInstance()?.destroy();
+  }, [initialize, getInstance]);
 
   return (
     <Sidebar collapsible="icon">

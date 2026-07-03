@@ -32,7 +32,7 @@ export function AppShell() {
       <TooltipProvider delayDuration={300}>
         <SidebarProvider className="h-dvh min-h-0">
           <AppSidebar config={config} />
-          <SidebarInset className="flex min-h-0 flex-col">
+          <SidebarInset className="flex min-h-0 min-w-0 flex-col">
           <header className="flex h-12 shrink-0 items-center gap-2.5 border-b border-border px-4">
             <SidebarTrigger className="-ml-1.5 size-8" />
             <Separator

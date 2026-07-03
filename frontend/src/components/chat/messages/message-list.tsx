@@ -10,8 +10,8 @@ import {
   MessageScrollerContent,
   MessageScrollerItem,
   MessageScrollerProvider,
-  MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
+import { MessageViewport } from "./message-viewport";
 import { UserMessage } from "./user-message";
 import { AssistantMessage } from "./assistant-message";
 
@@ -51,7 +51,7 @@ export function MessageList({
         className={cn("flex-1", className)}
         {...props}
       >
-        <MessageScrollerViewport>
+        <MessageViewport>
           <MessageScrollerContent className="mx-auto w-full max-w-3xl px-4 py-6">
             {messages.map((message) => (
               <MessageScrollerItem
@@ -70,7 +70,7 @@ export function MessageList({
               </MessageScrollerItem>
             ))}
           </MessageScrollerContent>
-        </MessageScrollerViewport>
+        </MessageViewport>
         <MessageScrollerButton />
       </MessageScroller>
     </MessageScrollerProvider>

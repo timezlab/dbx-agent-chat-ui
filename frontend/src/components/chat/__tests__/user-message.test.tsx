@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import type { Message } from "@/entities";
-import { UserMessage } from "@/components/chat/user-message";
+import { UserMessage } from "@/components/chat/messages/user-message";
 
 function userMessage(over: Partial<Message> = {}): Message {
   return {

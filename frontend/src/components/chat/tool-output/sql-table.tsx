@@ -1,4 +1,5 @@
 import { type SqlResult, sqlResultSchema } from "@/entities";
+import { OverlayScroll } from "@/components/overlay-scroll";
 
 /** Parse an `execute_sql` output blob into a table; null if it isn't `{ columns, rows }`. */
 export function parseSqlResult(detail: string | null): SqlResult | null {
@@ -17,7 +18,10 @@ export function parseSqlResult(detail: string | null): SqlResult | null {
 export function SqlTable({ table }: { table: SqlResult }) {
   return (
     <div className="space-y-1 py-0.5">
-      <div className="overflow-x-auto rounded-lg border border-border/60">
+      <OverlayScroll
+        axis="x"
+        className="rounded-lg border border-border/60"
+      >
         <table className="w-full border-collapse text-xs">
           <thead>
             <tr className="border-b border-border/60 bg-muted/40">
@@ -46,7 +50,7 @@ export function SqlTable({ table }: { table: SqlResult }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </OverlayScroll>
       {table.truncated || table.row_count != null ? (
         <div className="text-[10px] text-muted-foreground/70">
           {table.row_count != null ? `${table.row_count} rows` : null}

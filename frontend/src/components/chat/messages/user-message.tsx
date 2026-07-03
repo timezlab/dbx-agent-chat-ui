@@ -1,11 +1,10 @@
 import * as React from "react";
-import { PaperclipIcon, UserIcon } from "lucide-react";
+import { PaperclipIcon } from "lucide-react";
 
 import type { Message } from "@/entities";
 import { cn } from "@/lib/utils";
 import {
   Message as MessageRow,
-  MessageAvatar,
   MessageContent,
 } from "@/components/ui/message";
 
@@ -43,9 +42,6 @@ export function UserMessage({ message, className, ...props }: UserMessageProps) 
       )}
       {...props}
     >
-      <MessageAvatar className="size-7 self-start bg-primary text-primary-foreground">
-        <UserIcon className="size-4" />
-      </MessageAvatar>
       <MessageContent>
         <div
           data-slot="user-bubble"

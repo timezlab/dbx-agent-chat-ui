@@ -9,15 +9,14 @@ import { resolveReferenceLinks } from "@/lib/markdown/reference-links";
 import { splitDataImages } from "@/lib/markdown/data-images";
 import {
   Message as MessageRow,
-  MessageAvatar,
   MessageContent,
 } from "@/components/ui/message";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ActivityGroup } from "./activity-group";
-import { StreamError } from "./stream-error";
-import { FeedbackPanel } from "./feedback-panel";
-import { LinkSafetyModal } from "./link-safety-modal";
-import { Logo } from "@/components/logo";
+import { ActivityGroup } from "../activity-group";
+import { StreamError } from "../stream-error";
+import { FeedbackPanel } from "../feedback-panel";
+import { LinkSafetyModal } from "../link-safety-modal";
+import { useOverlayTables } from "./use-overlay-tables";
 
 export interface AssistantMessageProps extends React.ComponentProps<"div"> {
   message: Message;
@@ -42,7 +41,7 @@ const LINK_SAFETY = {
 };
 
 /**
- * An assistant turn. A brand avatar + a column that walks `Message.parts[]` in stream
+ * An assistant turn. A column that walks `Message.parts[]` in stream
  * order (FR-003/FR-004/FR-005) after folding each consecutive reasoning+tools run into
  * ONE collapsible "process" group (groupMessageParts) so a long tool run stays compact:
  * `text` → markdown/code via `streamdown` (animating caret while streaming); an
@@ -68,6 +67,10 @@ export function AssistantMessage({
   );
   const showFeedback = onFeedback != null && !streaming && hasVisible;
 
+  // Overlay scrollbars on any markdown table Streamdown renders in this turn (see hook).
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  useOverlayTables(contentRef);
+
   return (
     <MessageRow
       align="start"
@@ -76,10 +79,7 @@ export function AssistantMessage({
       className={cn(className)}
       {...props}
     >
-      <MessageAvatar className="size-7 self-start bg-transparent">
-        <Logo className="size-full" />
-      </MessageAvatar>
-      <MessageContent>
+      <MessageContent ref={contentRef}>
         {segments.map((segment, i) => {
           if (segment.kind === "text") {
             // Base64 images an agent streams are rendered by us (see renderTextSegment) —
