@@ -292,7 +292,7 @@ function ToolSpecCard({
           <span className="mb-2 block text-xs font-medium text-muted-foreground">
             Expected arguments
           </span>
-          <CodeBlock language="json" compact className="!my-0 flex-1">
+          <CodeBlock language="json" compact wrap className="!my-0 flex-1">
             {schema}
           </CodeBlock>
         </div>
@@ -300,7 +300,7 @@ function ToolSpecCard({
           <span className="mb-2 block text-xs font-medium text-muted-foreground">
             Example SSE payload
           </span>
-          <CodeBlock language="json" compact className="!my-0 flex-1">
+          <CodeBlock language="json" compact wrap className="!my-0 flex-1">
             {example}
           </CodeBlock>
         </div>

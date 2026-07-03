@@ -41,6 +41,7 @@ export function CodeBlock({
   children,
   codeString,
   compact = false,
+  wrap = false,
   collapsible = false,
   previewLines = 8,
   className,
@@ -51,6 +52,8 @@ export function CodeBlock({
   codeString?: string;
   /** Headerless variant for tight layouts (copy button floats over the code). */
   compact?: boolean;
+  /** Wrap long lines instead of scrolling horizontally (good for JSON payloads). */
+  wrap?: boolean;
   /** Clip to `previewLines` with an expand toggle for long snippets. */
   collapsible?: boolean;
   previewLines?: number;
@@ -129,7 +132,8 @@ export function CodeBlock({
       <div className="relative">
         <div
           className={cn(
-            "overflow-x-auto font-mono text-[13px] leading-[1.7] selection:bg-primary/15",
+            "font-mono text-[13px] leading-[1.7] selection:bg-primary/15",
+            wrap ? "overflow-x-hidden" : "overflow-x-auto",
             compact ? "p-4" : "p-5"
           )}
           style={
@@ -150,7 +154,17 @@ export function CodeBlock({
               {({ className, style, tokens, getLineProps, getTokenProps }) => (
                 <pre
                   className={className}
-                  style={{ ...style, backgroundColor: "transparent" }}
+                  style={{
+                    ...style,
+                    backgroundColor: "transparent",
+                    ...(wrap
+                      ? {
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                          overflowWrap: "anywhere",
+                        }
+                      : {}),
+                  }}
                 >
                   {tokens.map((line, i) => (
                     <div key={i} {...getLineProps({ line })}>
