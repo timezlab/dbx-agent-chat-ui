@@ -9,6 +9,7 @@ export * from "./attachment";
 export * from "./message";
 export * from "./conversation";
 export * from "./agent";
+export * from "./identity";
 export * from "./feedback";
 export * from "./config";
 export * from "./transport";

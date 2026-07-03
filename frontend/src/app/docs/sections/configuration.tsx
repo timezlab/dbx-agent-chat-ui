@@ -13,6 +13,9 @@ NEXT_PUBLIC_HISTORY_API_URL=/api/history
 NEXT_PUBLIC_FEEDBACK_API_URL=/api/feedback
 NEXT_PUBLIC_AGENTS_API_URL=/api/agents
 
+# [OPTIONAL] Identity endpoint (GET -> current user)
+NEXT_PUBLIC_ME_API_URL=/api/me
+
 # [OPTIONAL] Empty-state sample prompts (JSON Array)
 NEXT_PUBLIC_SAMPLE_PROMPTS='["Analyze data", "Write SQL"]'
 
@@ -53,6 +56,17 @@ export function ConfigurationSection() {
           <strong className="text-foreground">Graceful Degradation:</strong> If
           the History API fails or is unset, the UI falls back to{" "}
           <InlineCode>localStorage</InlineCode>.
+        </li>
+        <li>
+          <strong className="text-foreground">Identity chip:</strong> Set{" "}
+          <InlineCode>NEXT_PUBLIC_ME_API_URL</InlineCode> to a{" "}
+          <InlineCode>GET</InlineCode> endpoint returning{" "}
+          <InlineCode>{"{ email, username, user_id?, session_id?, auth_type?, org_id? }"}</InlineCode>{" "}
+          (<InlineCode>email</InlineCode> + <InlineCode>username</InlineCode>{" "}
+          required; <InlineCode>auth_type</InlineCode> is{" "}
+          <InlineCode>DB_SAML_SSO</InlineCode> or <InlineCode>PAT</InlineCode>).
+          It renders a read-only user chip in the sidebar footer; unset or a
+          failed fetch shows an anonymous placeholder instead.
         </li>
       </ul>
     </DocsSection>

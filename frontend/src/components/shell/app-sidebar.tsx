@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/sidebar";
 import { NavSettings } from "./nav-settings";
 import { NavDevTools } from "./nav-devtools";
+import { NavIdentity } from "./nav-identity";
 
 export interface AppSidebarProps {
   config: CapabilityConfig;
@@ -148,6 +149,9 @@ export function AppSidebar({ config }: AppSidebarProps) {
           ) : null}
           <SidebarMenuItem>
             <NavSettings config={config} />
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <NavIdentity config={config} />
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

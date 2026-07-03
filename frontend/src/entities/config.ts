@@ -12,6 +12,9 @@ export const CapabilityConfigSchema = z.object({
   historyUrl: z.string().optional(), // NEXT_PUBLIC_HISTORY_API_URL; unset ⇒ localStorage
   feedbackUrl: z.string().optional(), // NEXT_PUBLIC_FEEDBACK_API_URL; unset ⇒ mock sink
   agentsUrl: z.string().optional(), // NEXT_PUBLIC_AGENTS_API_URL; unset ⇒ ẩn selector
+  // NEXT_PUBLIC_ME_API_URL — endpoint trả identity người dùng hiện tại (email + optional).
+  // Optional; unset / fetch fail / thiếu email ⇒ ẩn chip identity. Chỉ để hiển thị.
+  meUrl: z.string().optional(),
   // NEXT_PUBLIC_SAMPLE_PROMPTS (JSON array chuỗi) — gợi ý hiển thị ở empty-state.
   // Optional (như mọi field khác); unset/không hợp lệ ⇒ coi như [] tại nơi tiêu thụ.
   samplePrompts: z.array(z.string()).optional(),

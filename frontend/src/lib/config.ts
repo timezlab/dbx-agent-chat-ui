@@ -12,6 +12,7 @@ export function resolveConfig(): CapabilityConfig {
     historyUrl: resolveDeploymentUrl(env.NEXT_PUBLIC_HISTORY_API_URL),
     feedbackUrl: resolveDeploymentUrl(env.NEXT_PUBLIC_FEEDBACK_API_URL),
     agentsUrl: resolveDeploymentUrl(env.NEXT_PUBLIC_AGENTS_API_URL),
+    meUrl: resolveDeploymentUrl(env.NEXT_PUBLIC_ME_API_URL),
     samplePrompts: parseSamplePrompts(env.NEXT_PUBLIC_SAMPLE_PROMPTS),
     uploadEnabled: parseUploadEnabled(env.NEXT_PUBLIC_ENABLE_UPLOAD),
     uploadAccept: parseUploadAccept(env.NEXT_PUBLIC_UPLOAD_ACCEPT),

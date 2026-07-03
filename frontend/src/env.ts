@@ -30,6 +30,11 @@ export const env = createEnv({
     // failure / empty ⇒ agent selector hidden, default endpoint used.
     NEXT_PUBLIC_AGENTS_API_URL: endpointUrl.optional(),
 
+    // Host-provided REST endpoint returning the current user's identity (email +
+    // username required; user_id/session_id/auth_type/org_id optional). Unset / failure
+    // / missing required field ⇒ identity chip hidden. Display-only; no secret in bundle.
+    NEXT_PUBLIC_ME_API_URL: endpointUrl.optional(),
+
     // Empty-state sample prompts, as a JSON array of strings (e.g.
     // `["Summarize this","Write a SQL query"]`). Parsed in lib/config; malformed
     // JSON degrades to no samples. Kept as a raw string here (JSON, not a URL).
@@ -65,6 +70,7 @@ export const env = createEnv({
     NEXT_PUBLIC_HISTORY_API_URL: process.env.NEXT_PUBLIC_HISTORY_API_URL,
     NEXT_PUBLIC_FEEDBACK_API_URL: process.env.NEXT_PUBLIC_FEEDBACK_API_URL,
     NEXT_PUBLIC_AGENTS_API_URL: process.env.NEXT_PUBLIC_AGENTS_API_URL,
+    NEXT_PUBLIC_ME_API_URL: process.env.NEXT_PUBLIC_ME_API_URL,
     NEXT_PUBLIC_SAMPLE_PROMPTS: process.env.NEXT_PUBLIC_SAMPLE_PROMPTS,
     NEXT_PUBLIC_ENABLE_UPLOAD: process.env.NEXT_PUBLIC_ENABLE_UPLOAD,
     NEXT_PUBLIC_UPLOAD_ACCEPT: process.env.NEXT_PUBLIC_UPLOAD_ACCEPT,

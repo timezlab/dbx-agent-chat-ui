@@ -423,3 +423,17 @@ Add US2 → US4 → US3 → US5, each tested independently and deployable, witho
   `domain.com/path/proxy/api/chat` when the app is mounted under that subpath, so ONE
   static build serves any mount point. Absolute/protocol-relative URLs bypass. See
   `contracts/config.md`.
+- **Identity chip + mock `me` endpoint (2026-07-03)**: New host-provided endpoint
+  `NEXT_PUBLIC_ME_API_URL` — a `GET` returning the current user as JSON
+  (`email` + `username` required; `user_id`/`session_id`/`auth_type` (`DB_SAML_SSO` | `PAT`)
+  /`org_id` optional). Mirrors the `agents` capability end-to-end: `entities/identity.ts`
+  (zod `IdentitySchema`) → `lib/identity/{client,remote}.ts` (`resolveIdentity` port, remote
+  fetch with `credentials: "include"`, throws on non-2xx / bad payload) → `hooks/identity/
+  use-identity.ts` (load-once) → `components/shell/nav-identity.tsx`, a shadcn `NavUser`-style
+  chip at the bottom of the sidebar footer (seeded DiceBear avatar, username + email, dropdown
+  listing the optional fields present). When `meUrl` is unset or the fetch fails it renders a
+  fixed **anonymous** placeholder rather than disappearing. Display-only — identity is never
+  sent to the chat backend (Principle I/II). Dev mock: `app/api/me/route.dev.ts` (dev-only,
+  `.dev.ts` gated out of the static export; needs `export const dynamic = "force-static"`
+  because a bare `GET` under `output: export` must be statically renderable — unlike the POST
+  chat mock). Default `.env` points `/api/me` at it.
