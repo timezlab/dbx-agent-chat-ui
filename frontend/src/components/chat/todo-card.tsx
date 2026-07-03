@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { CheckIcon, ChevronRightIcon, ListChecksIcon } from "lucide-react";
+import { ChevronRightIcon, ListChecksIcon } from "lucide-react";
 
 import type { Todo } from "@/entities";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { TodoChecklist } from "./todo-checklist";
 
 export interface TodoCardProps extends React.ComponentProps<"div"> {
   todos: Todo[];
@@ -65,53 +66,14 @@ export function TodoCard({ todos, className, ...props }: TodoCardProps) {
         <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/todo:rotate-90" />
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <ol className="flex flex-col gap-1.5 border-t border-border px-3 py-2.5">
-          {todos.map((todo, i) => (
-            <li
-              key={i}
-              data-status={todo.status}
-              className="flex items-start gap-2.5 animate-in fade-in slide-in-from-top-1 fill-mode-both"
-              style={{ animationDelay: `${i * 40}ms` }}
-            >
-              <StatusDot status={todo.status} />
-              <span
-                className={cn(
-                  "min-w-0 flex-1 leading-snug",
-                  todo.status === "completed" &&
-                    "text-muted-foreground line-through",
-                  todo.status === "in_progress" && "font-medium text-foreground",
-                  todo.status === "pending" && "text-muted-foreground",
-                )}
-              >
-                {todo.content}
-              </span>
-            </li>
-          ))}
-        </ol>
+        <TodoChecklist
+          todos={todos}
+          size="md"
+          animate
+          className="border-t border-border px-3 py-2.5"
+        />
       </CollapsibleContent>
     </Collapsible>
-  );
-}
-
-function StatusDot({ status }: { status: Todo["status"] }) {
-  if (status === "completed") {
-    return (
-      <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-good/15 text-good">
-        <CheckIcon className="size-3" />
-      </span>
-    );
-  }
-  if (status === "in_progress") {
-    return (
-      <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center">
-        <span className="size-2.5 animate-pulse rounded-full bg-running" />
-      </span>
-    );
-  }
-  return (
-    <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center">
-      <span className="size-2.5 rounded-full border border-muted-foreground/50" />
-    </span>
   );
 }
 

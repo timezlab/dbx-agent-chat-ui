@@ -3,9 +3,11 @@
 import * as React from "react";
 import {
   BrainIcon,
+  DatabaseIcon,
   FilePenIcon,
   FileTextIcon,
   GlobeIcon,
+  LibraryBigIcon,
   LinkIcon,
   ListTodoIcon,
   SearchIcon,
@@ -130,6 +132,53 @@ const BUILTIN_TOOLS = [
   "type": "function_call_output",
   "name": "web_search",
   "output": "[{\\"url\\": \\"https://example.com\\", \\"preview\\": \\"...\\"}]"
+}`,
+  },
+  {
+    name: "execute_sql",
+    icon: <DatabaseIcon className="size-3.5" />,
+    title: "Query",
+    schema: `// 1. Tool Call Args
+{
+  "query": "<string>",
+  "warehouse": "<string>",
+  "catalog": "<string>",
+  "schema": "<string>",
+  "limit": "<number>"
+}
+
+// 2. Tool Result Output — a table
+{
+  "columns": ["<string>"],
+  "rows": [["<cell>"]],
+  "row_count": "<number>"
+}`,
+    example: `{
+  "type": "function_call",
+  "name": "execute_sql",
+  "arguments": "{\\"query\\": \\"SELECT metric, actual_ytd FROM finance.pnl\\"}"
+}`,
+  },
+  {
+    name: "vector_search",
+    icon: <LibraryBigIcon className="size-3.5" />,
+    title: "Retrieve",
+    schema: `// 1. Tool Call Args
+{
+  "query": "<string>",
+  "num_results": "<number>",
+  "index": "<string>",
+  "columns": ["<string>"]
+}
+
+// 2. Tool Result Output — array of chunks
+[
+  { "content": "<string>", "source": "<string>", "score": "<number>" }
+]`,
+    example: `{
+  "type": "function_call",
+  "name": "vector_search",
+  "arguments": "{\\"query\\": \\"revenue recognition policy\\", \\"num_results\\": 3}"
 }`,
   },
   {

@@ -2,10 +2,12 @@ import type { ComponentType } from "react";
 import type { LucideProps } from "lucide-react";
 import {
   BrainIcon,
+  DatabaseIcon,
   FilePenIcon,
   FileTextIcon,
   FolderIcon,
   GlobeIcon,
+  LibraryBigIcon,
   LinkIcon,
   ListTodoIcon,
   PuzzleIcon,
@@ -66,6 +68,8 @@ const KNOWN_TOOLS = new Set([
   "task",
   "web_search",
   "web_fetch",
+  "execute_sql",
+  "vector_search",
   "compact_conversation",
 ]);
 
@@ -160,6 +164,20 @@ export function toolDisplay(
         title: "Fetch",
         subtitle: str(args.url),
         mono: true,
+      };
+    case "execute_sql":
+      return {
+        icon: DatabaseIcon,
+        title: "Query",
+        subtitle: str(args.query),
+        mono: true,
+      };
+    case "vector_search":
+      return {
+        icon: LibraryBigIcon,
+        title: "Retrieve",
+        subtitle: str(args.query),
+        mono: false,
       };
     case "compact_conversation":
       return { icon: BrainIcon, title: "Compact conversation", subtitle: null, mono: false };

@@ -18,6 +18,8 @@ import { executeSchema } from "./execute";
 import { taskSchema } from "./task";
 import { webSearchSchema } from "./web-search";
 import { webFetchSchema } from "./web-fetch";
+import { executeSqlSchema } from "./execute-sql";
+import { vectorSearchSchema } from "./vector-search";
 import { compactConversationSchema } from "./compact-conversation";
 
 // Re-export để import 1 chỗ.
@@ -33,6 +35,8 @@ export * from "./execute";
 export * from "./task";
 export * from "./web-search";
 export * from "./web-fetch";
+export * from "./execute-sql";
+export * from "./vector-search";
 export * from "./compact-conversation";
 
 /** name → schema (exact-match). Dùng khi biết trước name muốn validate. */
@@ -48,6 +52,8 @@ export const DEEPAGENTS_TOOL_SCHEMAS = {
   task: taskSchema,
   web_search: webSearchSchema,
   web_fetch: webFetchSchema,
+  execute_sql: executeSqlSchema,
+  vector_search: vectorSearchSchema,
   compact_conversation: compactConversationSchema,
 } as const;
 
@@ -70,6 +76,8 @@ export const DeepAgentsToolCallSchema = z.discriminatedUnion("name", [
   taskSchema,
   webSearchSchema,
   webFetchSchema,
+  executeSqlSchema,
+  vectorSearchSchema,
   compactConversationSchema,
 ]);
 export type DeepAgentsToolCall = z.infer<typeof DeepAgentsToolCallSchema>;

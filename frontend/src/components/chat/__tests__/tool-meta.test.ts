@@ -20,6 +20,8 @@ describe("isKnownTool", () => {
     expect(isKnownTool("grep")).toBe(true);
     expect(isKnownTool("web_search")).toBe(true);
     expect(isKnownTool("web_fetch")).toBe(true);
+    expect(isKnownTool("execute_sql")).toBe(true);
+    expect(isKnownTool("vector_search")).toBe(true);
     expect(isKnownTool("my_custom_agent_tool")).toBe(false);
   });
 });
@@ -48,6 +50,12 @@ describe("toolDisplay", () => {
     expect(
       toolDisplay(tool({ name: "web_fetch", args: { url: "https://example.com/a" } })),
     ).toMatchObject({ title: "Fetch", subtitle: "https://example.com/a", mono: true });
+    expect(
+      toolDisplay(tool({ name: "execute_sql", args: { query: "SELECT 1" } })),
+    ).toMatchObject({ title: "Query", subtitle: "SELECT 1", mono: true });
+    expect(
+      toolDisplay(tool({ name: "vector_search", args: { query: "revenue policy" } })),
+    ).toMatchObject({ title: "Retrieve", subtitle: "revenue policy", mono: false });
   });
 
   it("presents a read_file under /skills/ as a Skill; SKILL.md shows just the name", () => {

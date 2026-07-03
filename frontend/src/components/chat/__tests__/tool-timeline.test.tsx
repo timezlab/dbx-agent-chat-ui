@@ -62,3 +62,47 @@ describe("ToolTimeline — web_search output", () => {
     expect(screen.getByText("just a string")).toBeInTheDocument();
   });
 });
+
+describe("ToolTimeline — execute_sql output", () => {
+  it("renders a { columns, rows } payload as a table", () => {
+    const table = {
+      columns: ["Metric", "Actual YTD"],
+      rows: [
+        ["Revenue", 10171],
+        ["MRR", 8724],
+      ],
+      row_count: 2,
+    };
+    render(
+      <ToolTimeline
+        items={[
+          tool({ name: "execute_sql", args: { query: "SELECT ..." }, detail: JSON.stringify(table) }),
+        ]}
+      />,
+    );
+    expandFirstRow();
+    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Metric" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "Revenue" })).toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "10171" })).toBeInTheDocument();
+  });
+});
+
+describe("ToolTimeline — vector_search output", () => {
+  it("renders retrieval chunks with source, score, and content", () => {
+    const chunks = [
+      { content: "Revenue is recognized ratably over the term.", source: "/wiki/rev.md", score: 0.91 },
+    ];
+    render(
+      <ToolTimeline
+        items={[
+          tool({ name: "vector_search", args: { query: "revenue" }, detail: JSON.stringify(chunks) }),
+        ]}
+      />,
+    );
+    expandFirstRow();
+    expect(screen.getByText("/wiki/rev.md")).toBeInTheDocument();
+    expect(screen.getByText("0.91")).toBeInTheDocument();
+    expect(screen.getByText(/recognized ratably/)).toBeInTheDocument();
+  });
+});

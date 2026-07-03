@@ -64,6 +64,19 @@ export interface WebFetchArgs {
   max_length?: number | null; // cắt nội dung ở N ký tự
   format?: string | null; // "markdown" | "text" | "html"
 }
+export interface ExecuteSqlArgs {
+  query: string;
+  warehouse?: string | null; // SQL warehouse (id/tên)
+  catalog?: string | null; // Unity Catalog mặc định
+  schema?: string | null; // schema mặc định
+  limit?: number | null; // giới hạn số dòng
+}
+export interface VectorSearchArgs {
+  query: string;
+  num_results?: number | null; // top-k
+  index?: string | null; // "catalog.schema.my_index"
+  columns?: string[] | null; // cột lấy về, ví dụ ["id","text"]
+}
 export type CompactConversationArgs = Record<string, never>; // {} — sự kiện START
 
 /* compact_conversation — kết quả (sự kiện END, từ function_call_output) */
@@ -86,6 +99,8 @@ export type DeepAgentsToolName =
   | "task"
   | "web_search"
   | "web_fetch"
+  | "execute_sql"
+  | "vector_search"
   | "compact_conversation";
 
 export type DeepAgentsToolCall =
@@ -100,6 +115,8 @@ export type DeepAgentsToolCall =
   | { name: "task"; args: TaskArgs }
   | { name: "web_search"; args: WebSearchArgs }
   | { name: "web_fetch"; args: WebFetchArgs }
+  | { name: "execute_sql"; args: ExecuteSqlArgs }
+  | { name: "vector_search"; args: VectorSearchArgs }
   | { name: "compact_conversation"; args: CompactConversationArgs };
 
 /* ── Sự kiện compact TỰ ĐỘNG (không phải tool) ── */

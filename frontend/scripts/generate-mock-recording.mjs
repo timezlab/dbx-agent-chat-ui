@@ -284,6 +284,42 @@ addFc(
   "/wiki/globaltech/sales.md: Revenue framework",
 );
 
+// Retrieve the exact definitions via vector search (output = array of chunks).
+addReasoning("Grep only points at files — use vector_search to pull the exact segment definitions and revenue-recognition policy.");
+addFc(
+  "013VecSr",
+  "vector_search",
+  JSON.stringify({
+    query: "GlobalTech revenue recognition policy and customer segment definitions",
+    num_results: 3,
+    index: "main.wiki.globaltech_docs",
+  }),
+  JSON.stringify(
+    [
+      {
+        content:
+          "Revenue is recognized ratably over the subscription term. MRR excludes one-off professional services, which are recognized on delivery.",
+        source: "/wiki/globaltech/finance/revenue-recognition.md",
+        score: 0.91,
+      },
+      {
+        content:
+          "Segments by annual contract value: Enterprise (>$100k), Mid-Market ($20k–100k), SMB (<$20k), Prosumer (self-serve), Startup (discounted program).",
+        source: "/wiki/globaltech/sales/segments.md",
+        score: 0.87,
+      },
+      {
+        content:
+          "SPLY (Same Period Last Year) is the standard YoY baseline used across all board and investor reporting.",
+        source: "/wiki/globaltech/finance/glossary.md",
+        score: 0.82,
+      },
+    ],
+    null,
+    2,
+  ),
+);
+
 todos[0].status = "completed";
 todos[1].status = "in_progress";
 addFc("01GkGVnE", "write_todos", JSON.stringify({ todos }), "✅");
@@ -364,6 +400,47 @@ addFc(
   "task",
   '{"description":"Retrieve GlobalTech overall performance overview for January to May 2026 (YTD).","subagent_type":"data_agent"}',
   "| MRR | Revenue | Margin |\\n| 8,724 | 10,171 | 76.8% |",
+);
+
+// Pull the concrete YTD figures straight from the warehouse (output = a table).
+addReasoning("Get the exact YTD numbers from the warehouse with SQL for the report table.");
+addFc(
+  "016SqlYt",
+  "execute_sql",
+  JSON.stringify({
+    query:
+      "SELECT metric, jan, feb, mar, apr, may, actual_ytd, budget_ytd, sply_ytd, vs_plan_pct, vs_sply_pct FROM finance.globaltech.pnl_monthly WHERE period BETWEEN '2026-01' AND '2026-05' ORDER BY actual_ytd DESC",
+    warehouse: "wh-analytics",
+    catalog: "finance",
+    schema: "globaltech",
+  }),
+  JSON.stringify(
+    {
+      // Wide table on purpose: 11 columns → the card scrolls horizontally.
+      columns: [
+        "Metric",
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Actual YTD",
+        "Budget YTD",
+        "SPLY YTD",
+        "vs Plan",
+        "vs SPLY",
+      ],
+      rows: [
+        ["Revenue", 1900, 1950, 2050, 2100, 2171, 10171, 10987, 8868, "-7.4%", "+14.7%"],
+        ["MRR", 1680, 1720, 1740, 1780, 1804, 8724, 8978, 7226, "-2.8%", "+20.7%"],
+        ["Services", 240, 250, 270, 280, 280, 1320, 1596, 1454, "-17.3%", "-9.2%"],
+      ],
+      row_count: 3,
+      truncated: false,
+    },
+    null,
+    2,
+  ),
 );
 
 todos[2].status = "completed";
