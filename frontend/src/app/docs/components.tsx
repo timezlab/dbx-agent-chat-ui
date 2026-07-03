@@ -98,11 +98,11 @@ export function Step({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative pb-2 pl-12">
+    <div className="relative pl-12">
       {!isLast && (
         <div
           aria-hidden
-          className="absolute bottom-0 left-[15px] top-9 w-px bg-border/60"
+          className="absolute -bottom-8 left-[15.5px] top-8 w-px bg-border/60"
         />
       )}
       <div className="absolute left-0 top-0 flex size-8 items-center justify-center rounded-full border border-border/60 bg-card font-mono text-xs font-medium text-muted-foreground">
