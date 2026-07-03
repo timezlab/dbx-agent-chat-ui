@@ -6,6 +6,12 @@ import {
 import type { ChatStreamHandlers } from "@/lib/chat/transport";
 import { createResponsesParser } from "./responses";
 
+/** A deterministic, non-transient failure (auth, bad request, wrong content
+ *  type). Surfaced to the user immediately — reconnecting would just repeat it. */
+class NonRetryableStreamError extends Error {
+  readonly nonRetryable = true;
+}
+
 /** Pull a human-readable server message out of a non-stream error response,
  *  preferring a JSON `{ detail }` / `{ error }` field, else raw text. */
 async function readServerError(response: Response): Promise<string> {
@@ -44,10 +50,12 @@ export interface StreamSSEOptions {
   headers?: Record<string, string>;
   /** Injectable fetch (tests). Defaults to the global. */
   fetchImpl?: typeof fetch;
+  /** Delay before a reconnect attempt, ms. Defaults to 2000. */
+  retryDelayMs?: number;
 }
 
 export function streamSSE(options: StreamSSEOptions): AbortController {
-  const { url, body, handlers, headers, fetchImpl } = options;
+  const { url, body, handlers, headers, fetchImpl, retryDelayMs = 500 } = options;
   const controller = new AbortController();
   const parser = createResponsesParser();
 
@@ -88,9 +96,9 @@ export function streamSSE(options: StreamSSEOptions): AbortController {
         return; // healthy stream — proceed to onmessage
       }
       // Surface a server-provided reason (e.g. auth / bad request) instead of a
-      // generic network error. Throwing routes through onerror, which emits the
-      // error event and rethrows to stop fetch-event-source auto-retry.
-      throw new Error(
+      // generic network error. Throwing routes through onerror; the non-retryable
+      // marker tells it to emit the error and rethrow rather than reconnect.
+      throw new NonRetryableStreamError(
         response.ok
           ? `Unexpected response type: ${contentType || "unknown"}`
           : await readServerError(response),
@@ -112,29 +120,43 @@ export function streamSSE(options: StreamSSEOptions): AbortController {
       }
     },
     onclose() {
-      // Không gọi close("done") để fetch-event-source tự động chờ và reconnect
-      // nếu server (FastAPI proxy) chủ động ngắt connection trước timeout 10 phút.
-      console.log("Server closed stream. Awaiting auto-reconnect...");
+      // Reaching onclose means getBytes() returned — the server ended the
+      // response body. If we already saw a terminal frame ([DONE]/done/error),
+      // we're done. Otherwise the stream was cut short (e.g. the FastAPI proxy
+      // closing before its 10-min timeout): fetch-event-source only reconnects
+      // from the catch/onerror path, so throw to route there instead of
+      // resolving silently (which would hang the UI with no terminal event).
+      if (closed) return;
+      throw new Error("Server closed stream before completion");
     },
     onerror(err) {
       if (controller.signal.aborted) {
         close("abort");
         throw err;
       }
-      
-      if (retryCount >= maxRetries) {
-        handlers.onEvent({
-          type: "error",
-          message: err instanceof Error ? err.message : "Stream error (max retries reached)",
-        });
-        close("error");
-        throw err;
+
+      const isNonRetryable =
+        err instanceof NonRetryableStreamError || closed;
+      if (!isNonRetryable && retryCount < maxRetries) {
+        retryCount++;
+        console.warn(
+          `Stream interrupted, reconnecting (${retryCount}/${maxRetries})...`,
+          err,
+        );
+        // Returning a number schedules a reconnect after this many ms.
+        return retryDelayMs;
       }
 
-      retryCount++;
-      console.warn(`Stream error, attempting to reconnect (${retryCount}/${maxRetries})...`, err);
-      // Trả về số milisecond để retry (ví dụ: 2000ms)
-      return 2000;
+      // Non-retryable, or retries exhausted: surface the error and stop.
+      handlers.onEvent({
+        type: "error",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Stream error (max retries reached)",
+      });
+      close("error");
+      throw err;
     },
   }).catch(() => {
     // Rejection already surfaced via onerror/abort; ensure we always close.

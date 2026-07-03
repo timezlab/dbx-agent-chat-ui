@@ -125,6 +125,36 @@ describe("streamSSE (live SSE client, injected fetch)", () => {
     expect(c.closeReason).toBe("error");
   });
 
+  it("reconnects when the server closes the stream before a terminal frame", async () => {
+    const c = collect();
+    // First response ends WITHOUT a terminal frame (no [DONE]/done event) —
+    // a premature proxy close. Second response is the full terminal recording.
+    const nonTerminal = [
+      'data: {"type":"response.output_text.delta","item_id":"m","delta":"Partial"}',
+      "",
+      "",
+    ].join("\n");
+    const fetchImpl = vi
+      .fn()
+      .mockImplementationOnce(async () => sseResponse(nonTerminal))
+      .mockImplementationOnce(async () => sseResponse(RECORDING));
+
+    streamSSE({
+      url: "https://agent.example/invocations",
+      body: { messages: [] },
+      handlers: c.handlers,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      retryDelayMs: 5,
+    });
+
+    await until(() => c.closeReason !== undefined, 2000);
+
+    // A second POST must have gone out — the reconnect the design promises.
+    expect(fetchImpl.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(c.closeReason).toBe("done");
+    expect(c.events.at(-1)).toEqual({ type: "done" });
+  });
+
   it("closes 'abort' when the returned controller is aborted", async () => {
     const c = collect();
     // A never-ending stream so we abort mid-flight.
