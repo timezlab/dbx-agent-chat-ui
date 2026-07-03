@@ -18,6 +18,8 @@ describe("isKnownTool", () => {
   it("recognizes deepagents built-ins and rejects custom names", () => {
     expect(isKnownTool("write_todos")).toBe(true);
     expect(isKnownTool("grep")).toBe(true);
+    expect(isKnownTool("web_search")).toBe(true);
+    expect(isKnownTool("web_fetch")).toBe(true);
     expect(isKnownTool("my_custom_agent_tool")).toBe(false);
   });
 });
@@ -40,6 +42,12 @@ describe("toolDisplay", () => {
       title: "Search",
       subtitle: "foo",
     });
+    expect(
+      toolDisplay(tool({ name: "web_search", args: { query: "SaaS market 2026" } })),
+    ).toMatchObject({ title: "Search web", subtitle: "SaaS market 2026", mono: false });
+    expect(
+      toolDisplay(tool({ name: "web_fetch", args: { url: "https://example.com/a" } })),
+    ).toMatchObject({ title: "Fetch", subtitle: "https://example.com/a", mono: true });
   });
 
   it("presents a read_file under /skills/ as a Skill; SKILL.md shows just the name", () => {

@@ -5,6 +5,8 @@ import {
   BrainIcon,
   FilePenIcon,
   FileTextIcon,
+  GlobeIcon,
+  LinkIcon,
   ListTodoIcon,
   SearchIcon,
   SparklesIcon,
@@ -96,6 +98,53 @@ const BUILTIN_TOOLS = [
   "type": "function_call",
   "name": "task",
   "arguments": "{\\"description\\": \\"Fix styling\\"}"
+}`,
+  },
+  {
+    name: "web_search",
+    icon: <GlobeIcon className="size-3.5" />,
+    title: "Search web",
+    schema: `// 1. Tool Call Args
+{
+  "query": "<string>",
+  "max_results": "<number>",
+  "sources": ["<string>"],
+  "location": "<string>",
+  "start_date": "<string>",
+  "end_date": "<string>"
+}
+
+// 2. Tool Result Output — array of sources
+[
+  { "url": "<string>", "title": "<string>", "preview": "<string>" }
+]`,
+    example: `// 1. Tool Call Event
+{
+  "type": "function_call",
+  "name": "web_search",
+  "arguments": "{\\"query\\": \\"SaaS market 2026\\", \\"sources\\": [\\"news\\"]}"
+}
+
+// 2. Tool Result Event (rendered as source cards)
+{
+  "type": "function_call_output",
+  "name": "web_search",
+  "output": "[{\\"url\\": \\"https://example.com\\", \\"preview\\": \\"...\\"}]"
+}`,
+  },
+  {
+    name: "web_fetch",
+    icon: <LinkIcon className="size-3.5" />,
+    title: "Fetch",
+    schema: `{
+  "url": "<string>",
+  "max_length": "<number>",
+  "format": "<string>"
+}`,
+    example: `{
+  "type": "function_call",
+  "name": "web_fetch",
+  "arguments": "{\\"url\\": \\"https://example.com\\", \\"format\\": \\"markdown\\"}"
 }`,
   },
   {

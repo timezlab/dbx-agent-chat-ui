@@ -16,6 +16,8 @@ import { globSchema } from "./glob";
 import { grepSchema } from "./grep";
 import { executeSchema } from "./execute";
 import { taskSchema } from "./task";
+import { webSearchSchema } from "./web-search";
+import { webFetchSchema } from "./web-fetch";
 import { compactConversationSchema } from "./compact-conversation";
 
 // Re-export để import 1 chỗ.
@@ -29,6 +31,8 @@ export * from "./glob";
 export * from "./grep";
 export * from "./execute";
 export * from "./task";
+export * from "./web-search";
+export * from "./web-fetch";
 export * from "./compact-conversation";
 
 /** name → schema (exact-match). Dùng khi biết trước name muốn validate. */
@@ -42,6 +46,8 @@ export const DEEPAGENTS_TOOL_SCHEMAS = {
   grep: grepSchema,
   execute: executeSchema,
   task: taskSchema,
+  web_search: webSearchSchema,
+  web_fetch: webFetchSchema,
   compact_conversation: compactConversationSchema,
 } as const;
 
@@ -62,6 +68,8 @@ export const DeepAgentsToolCallSchema = z.discriminatedUnion("name", [
   grepSchema,
   executeSchema,
   taskSchema,
+  webSearchSchema,
+  webFetchSchema,
   compactConversationSchema,
 ]);
 export type DeepAgentsToolCall = z.infer<typeof DeepAgentsToolCallSchema>;

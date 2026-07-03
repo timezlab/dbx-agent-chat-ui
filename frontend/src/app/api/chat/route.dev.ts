@@ -30,7 +30,6 @@ import { delayFor, parseFrames } from "@/lib/stream/recording";
 //   3. the committed small sample (always available, e.g. fresh clone / CI)
 const RECORDING_CANDIDATES = [
   process.env.MOCK_RECORDING,
-  "sse-recordings/rbg-performance-2026.txt", // real capture (gitignored, local)
   "sse-recordings/default.txt", // committed small sample (always present)
 ].filter(Boolean) as string[];
 

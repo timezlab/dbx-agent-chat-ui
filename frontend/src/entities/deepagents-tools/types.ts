@@ -51,6 +51,19 @@ export interface TaskArgs {
   description: string;
   subagent_type: string;
 }
+export interface WebSearchArgs {
+  query: string;
+  max_results?: number | null; // default backend (Tavily = 5)
+  sources?: string[] | null; // Tavily "news"/"general" · Firecrawl "web"/"news"/…
+  location?: string | null; // thiên vị địa lý, ví dụ "US"
+  start_date?: string | null; // ISO date
+  end_date?: string | null; // ISO date
+}
+export interface WebFetchArgs {
+  url: string;
+  max_length?: number | null; // cắt nội dung ở N ký tự
+  format?: string | null; // "markdown" | "text" | "html"
+}
 export type CompactConversationArgs = Record<string, never>; // {} — sự kiện START
 
 /* compact_conversation — kết quả (sự kiện END, từ function_call_output) */
@@ -71,6 +84,8 @@ export type DeepAgentsToolName =
   | "grep"
   | "execute"
   | "task"
+  | "web_search"
+  | "web_fetch"
   | "compact_conversation";
 
 export type DeepAgentsToolCall =
@@ -83,6 +98,8 @@ export type DeepAgentsToolCall =
   | { name: "grep"; args: GrepArgs }
   | { name: "execute"; args: ExecuteArgs }
   | { name: "task"; args: TaskArgs }
+  | { name: "web_search"; args: WebSearchArgs }
+  | { name: "web_fetch"; args: WebFetchArgs }
   | { name: "compact_conversation"; args: CompactConversationArgs };
 
 /* ── Sự kiện compact TỰ ĐỘNG (không phải tool) ── */

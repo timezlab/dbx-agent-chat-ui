@@ -1,10 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { CheckIcon, ChevronRightIcon } from "lucide-react";
+import { CheckIcon, ChevronRightIcon, GlobeIcon } from "lucide-react";
 import { z } from "zod";
 
-import { type ToolActivityItem, type Todo, TodoSchema } from "@/entities";
+import {
+  type ToolActivityItem,
+  type Todo,
+  type WebSearchResult,
+  TodoSchema,
+  webSearchResultsSchema,
+} from "@/entities";
 import { cn } from "@/lib/utils";
 import {
   Collapsible,
@@ -100,7 +106,7 @@ function ToolRow({
         />
       </CollapsibleTrigger>
       {expandable ? (
-        <CollapsibleContent className="ml-6 mt-1 mb-1 border-l border-border pl-3">
+        <CollapsibleContent className="ml-6 mt-1 mb-1 border-border">
           {body}
         </CollapsibleContent>
       ) : null}
@@ -121,6 +127,13 @@ function toolBody(item: ToolActivityItem): React.ReactNode {
     const parsed = TodosArraySchema.safeParse(args.todos);
     if (!parsed.success || parsed.data.length === 0) return null;
     return <PlanList todos={parsed.data} />;
+  }
+
+  // Web search: its output is an array of source objects (url + preview), not a blob —
+  // render them as source cards. Non-array payloads fall through to the generic view.
+  if (item.name === "web_search") {
+    const sources = parseWebSearchResults(item.detail);
+    if (sources.length > 0) return <SourceList sources={sources} />;
   }
 
   // Built-in tools: short args as a compact list, long text + output as blocks.
@@ -196,6 +209,101 @@ function LabeledBlock({ label, text }: { label: string; text: string }) {
         {text}
       </pre>
     </div>
+  );
+}
+
+/** Parse a `web_search` output blob into typed sources; `[]` if it isn't a result array. */
+function parseWebSearchResults(detail: string | null): WebSearchResult[] {
+  if (!detail) return [];
+  let json: unknown;
+  try {
+    json = JSON.parse(detail);
+  } catch {
+    return [];
+  }
+  const parsed = webSearchResultsSchema.safeParse(json);
+  return parsed.success ? parsed.data : [];
+}
+
+/** Host of a URL for display / favicon lookup; the raw string if it won't parse. */
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+/** Google's favicon service, keyed by host. Null when the URL is unparseable. */
+function faviconSrc(url: string): string | null {
+  try {
+    return `https://www.google.com/s2/favicons?sz=128&domain=${new URL(url).hostname}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * web_search results as source cards. Row 1: favicon + title (left) + domain (right).
+ * Row 2: the preview snippet (clamped to two lines).
+ */
+function SourceList({ sources }: { sources: WebSearchResult[] }) {
+  return (
+    <ul className="flex flex-col gap-2 py-0.5">
+      {sources.map((s, i) => (
+        <li key={i}>
+          <a
+            href={s.url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex flex-col gap-1 rounded-lg border border-border/60 bg-card px-2.5 py-2 transition-colors hover:border-border"
+          >
+            {/* Row 1: logo · title · domain */}
+            <span className="flex items-center gap-2">
+              <SourceFavicon url={s.url} />
+              <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
+                {s.title || hostnameOf(s.url)}
+              </span>
+              <span className="shrink-0 text-[10px] text-muted-foreground/70">
+                {hostnameOf(s.url)}
+              </span>
+            </span>
+            {/* Row 2: preview */}
+            {s.preview ? (
+              <span className="line-clamp-2 text-[11px] leading-snug text-muted-foreground mt-1">
+                {s.preview}
+              </span>
+            ) : null}
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Favicon for a source; falls back to a neutral globe if it can't load. */
+function SourceFavicon({ url }: { url: string }) {
+  const src = faviconSrc(url);
+  const [failed, setFailed] = React.useState(false);
+  if (!src || failed) {
+    return (
+      <span className="flex size-4 shrink-0 items-center justify-center">
+        <GlobeIcon className="size-3.5 text-muted-foreground" />
+      </span>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- external favicon, not a bundled asset
+    <img
+      src={src}
+      alt=""
+      role="presentation"
+      width={16}
+      height={16}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="size-4 shrink-0 rounded-sm"
+    />
   );
 }
 

@@ -5,6 +5,8 @@ import {
   FilePenIcon,
   FileTextIcon,
   FolderIcon,
+  GlobeIcon,
+  LinkIcon,
   ListTodoIcon,
   PuzzleIcon,
   SearchIcon,
@@ -62,6 +64,8 @@ const KNOWN_TOOLS = new Set([
   "grep",
   "execute",
   "task",
+  "web_search",
+  "web_fetch",
   "compact_conversation",
 ]);
 
@@ -142,6 +146,20 @@ export function toolDisplay(
         title: "Delegate",
         subtitle: str(args.description),
         mono: false,
+      };
+    case "web_search":
+      return {
+        icon: GlobeIcon,
+        title: "Search web",
+        subtitle: str(args.query),
+        mono: false,
+      };
+    case "web_fetch":
+      return {
+        icon: LinkIcon,
+        title: "Fetch",
+        subtitle: str(args.url),
+        mono: true,
       };
     case "compact_conversation":
       return { icon: BrainIcon, title: "Compact conversation", subtitle: null, mono: false };

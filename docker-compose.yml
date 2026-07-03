@@ -34,7 +34,7 @@ services:
       resources:
         limits:
           cpus: ${WEB_CPUS_LIMIT:-1.5}
-          memory: ${WEB_MEM_LIMIT:-1g}
+          memory: ${WEB_MEM_LIMIT:-2g}
         reservations:
           cpus: ${WEB_CPUS_RESERVE:-0.25}
           memory: ${WEB_MEM_RESERVE:-256m}

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev",
     "mock:api": "node scripts/mock-api.mjs",
+    "mock:gen": "node scripts/generate-mock-recording.mjs && node scripts/gen-replay-recording.mjs",
     "build:manual": "node scripts/gen-replay-recording.mjs && next build && rm -rf out-manual && mv out out-manual && node scripts/verify-manual-output.mjs && cd out-manual && python3 -m zipfile -c ../../manual.zip * && cd .. && rm -rf out-manual",
     "build:embed": "node scripts/gen-replay-recording.mjs && vite build --config vite.embed.config.ts && node scripts/verify-embed-output.mjs",
     "build:docs": "node scripts/gen-replay-recording.mjs && vite build --config vite.docs.config.ts",
