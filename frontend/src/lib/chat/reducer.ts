@@ -2,6 +2,7 @@ import {
   type ChatSession,
   type ChatStreamEvent,
   type Message,
+  type MessageMetrics,
   type MessagePart,
   type ToolActivityItem,
   parseToolCall,
@@ -20,6 +21,16 @@ export function reduceStreamEvent(
   conversation: ChatSession,
   event: ChatStreamEvent,
 ): ChatSession {
+  // Usage is not tied to the streaming state machine: it can arrive just before or after
+  // the terminal `done` (which nulls `activeId`), so attach it to the LAST assistant turn
+  // regardless — handled before the `!activeId` guard below.
+  if (event.type === "usage") {
+    return mapLastAssistant(conversation, (m) => ({
+      ...m,
+      metrics: mergeMetrics(m.metrics, event),
+    }));
+  }
+
   const { activeId } = conversation;
   if (!activeId) return conversation; // nothing streaming → ignore
 
@@ -82,6 +93,7 @@ function toToolItem(event: Extract<ChatStreamEvent, { type: "tool" }>): ToolActi
     args,
     detail: event.detail ?? null,
     status: event.status,
+    ...(event.durationMs != null ? { durationMs: event.durationMs } : {}),
   };
 }
 
@@ -115,6 +127,9 @@ function mergeTool(
     args: incoming.args ?? existing.args,
     detail: incoming.detail ?? existing.detail,
     status: incoming.status === "done" ? "done" : existing.status,
+    ...(incoming.durationMs ?? existing.durationMs) != null
+      ? { durationMs: incoming.durationMs ?? existing.durationMs }
+      : {},
   };
 }
 
@@ -170,4 +185,41 @@ function mapActive(
       m.id === conversation.activeId ? fn(m) : m,
     ),
   };
+}
+
+/** Rebuild the session with the LAST assistant message transformed (or unchanged when
+ *  there is none). Used for `usage`, which attaches to the reply even once `done` has
+ *  cleared `activeId`. */
+function mapLastAssistant(
+  conversation: ChatSession,
+  fn: (m: Message) => Message,
+): ChatSession {
+  let idx = -1;
+  for (let i = conversation.messages.length - 1; i >= 0; i--) {
+    if (conversation.messages[i].role === "assistant") {
+      idx = i;
+      break;
+    }
+  }
+  if (idx === -1) return conversation;
+  return {
+    ...conversation,
+    messages: conversation.messages.map((m, i) => (i === idx ? fn(m) : m)),
+  };
+}
+
+/** Fold a `usage` event onto prior metrics, keeping only the numbers actually present so
+ *  a later frame (e.g. cost after tokens) merges instead of clobbering. */
+function mergeMetrics(
+  prev: MessageMetrics | undefined,
+  event: Extract<ChatStreamEvent, { type: "usage" }>,
+): MessageMetrics {
+  const next: MessageMetrics = { ...prev };
+  if (event.inputTokens != null) next.inputTokens = event.inputTokens;
+  if (event.outputTokens != null) next.outputTokens = event.outputTokens;
+  if (event.totalTokens != null) next.totalTokens = event.totalTokens;
+  if (event.costUsd != null) next.costUsd = event.costUsd;
+  if (event.durationMs != null) next.durationMs = event.durationMs;
+  if (event.ttftMs != null) next.ttftMs = event.ttftMs;
+  return next;
 }

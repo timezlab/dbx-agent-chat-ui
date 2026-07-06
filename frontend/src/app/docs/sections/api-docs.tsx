@@ -93,8 +93,15 @@ data: {"type": "response.reasoning_text.delta", "delta": "Comparing options..."}
 data: {"type": "response.output_item.done", "item": {"type": "function_call",
   "call_id": "c1", "name": "run_sql", "arguments": "{\\"query\\": \\"SELECT 1\\"}"}}
 
+// Optional "duration_ms" on the output = per-tool run time (shown on the tool row).
 data: {"type": "response.output_item.done", "item": {"type": "function_call_output",
-  "call_id": "c1", "output": "[{...rows...}]"}}
+  "call_id": "c1", "output": "[{...rows...}]", "duration_ms": 640}}
+
+// OPTIONAL usage — tokens + cost for the reply (shown in the metrics footer). Cost is
+// backend-provided; the UI never estimates it. Also read from a top-level "usage" or
+// "databricks_output.usage". MUST arrive BEFORE the terminal "message" item below.
+data: {"type": "response.completed", "response": {"usage": {"input_tokens": 8450,
+  "output_tokens": 2130, "total_tokens": 10580, "cost_usd": 0.0623}}}
 
 // TERMINAL — the "message" item closes the turn (text already streamed via the
 // deltas above is NOT re-read from it).
@@ -103,7 +110,7 @@ data: {"type": "response.output_item.done", "item": {"type": "message", ...}}
 data: [DONE]     // also accepted as a terminal sentinel
 
 // Errors: {"databricks_output": {"error": "..."}} or {"error": "..."} on any frame.
-// Lifecycle / unknown frame types (e.g. response.completed) are ignored.`;
+// Other lifecycle / unknown frame types are ignored.`;
 
 // ---------------------------------------------------------------------------
 // GET {HISTORY_API_URL}
@@ -330,8 +337,15 @@ export function ApiDocsSection() {
             <InlineCode>agentId</InlineCode> when one is chosen — and streams the
             reply back as Server-Sent Events (Databricks Playground frames).
             Attachments ride only on the turn being sent; replayed history turns
-            never carry them. See <InlineCode>Backend Integration</InlineCode> for
-            the full event grammar.
+            never carry them. An <em>optional</em>{" "}
+            <InlineCode>response.completed</InlineCode> frame may carry{" "}
+            <InlineCode>usage</InlineCode> (token counts + a backend-computed{" "}
+            <InlineCode>cost_usd</InlineCode>) and each{" "}
+            <InlineCode>function_call_output</InlineCode> an optional{" "}
+            <InlineCode>duration_ms</InlineCode> — surfaced in the per-reply metrics
+            footer and per-tool run-time (response time &amp; time-to-first-token are
+            measured in the browser). See{" "}
+            <InlineCode>Backend Integration</InlineCode> for the full event grammar.
           </p>
           <CodeBlock title="Types" language="typescript" wrap>
             {CHAT_TYPES}

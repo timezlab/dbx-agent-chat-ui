@@ -16,6 +16,7 @@ import { ActivityGroup } from "../activity-group";
 import { StreamError } from "../stream-error";
 import { FeedbackPanel } from "../feedback-panel";
 import { LinkSafetyModal } from "../link-safety-modal";
+import { MessageMetrics } from "./message-metrics";
 import { useOverlayTables } from "./use-overlay-tables";
 
 export interface AssistantMessageProps extends React.ComponentProps<"div"> {
@@ -27,6 +28,8 @@ export interface AssistantMessageProps extends React.ComponentProps<"div"> {
    * reads "Create plan" while later ones read "Update plan" (threaded from the list).
    */
   firstPlanCallId?: string | null;
+  /** Show the usage/metrics footer (time · TTFT · tokens · cost). Default true. */
+  showMetrics?: boolean;
 }
 
 /** Shiki themes for streamed code blocks (light, dark) — flip with the app theme. */
@@ -53,6 +56,7 @@ export function AssistantMessage({
   message,
   onFeedback,
   firstPlanCallId,
+  showMetrics = true,
   className,
   ...props
 }: AssistantMessageProps) {
@@ -164,6 +168,13 @@ export function AssistantMessage({
         ) : null}
 
         {message.error ? <StreamError message={message.error} /> : null}
+
+        {/* Usage/metrics footer: a live clock while streaming (client-measured time · TTFT),
+            then tokens · cost once the backend `usage` frame lands. Self-hides when there is
+            nothing to show (e.g. a reloaded turn the backend sent no metrics for). */}
+        {showMetrics ? (
+          <MessageMetrics message={message} streaming={streaming} />
+        ) : null}
 
         {showFeedback ? (
           <FeedbackPanel

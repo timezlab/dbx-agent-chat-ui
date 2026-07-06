@@ -54,6 +54,33 @@ Use an event reducer similar to Lakemind's pattern:
 - Abort on cancel or terminal `[DONE]`/done event.
 - Keep final assistant state immutable and cache invalidation explicit.
 
+#### Usage / metrics events (per-reply time · TTFT · tokens · cost)
+
+The neutral event vocabulary carries a non-terminal **`usage`** event
+(`{ inputTokens?, outputTokens?, totalTokens?, costUsd?, durationMs?, ttftMs? }`) and an
+optional **`durationMs`** on the `tool` event. The Responses parser maps a
+`response.completed` frame — or any frame carrying `usage` / `databricks_output.usage` — to
+a `usage` event, and reads `duration_ms` off a `function_call_output` for per-tool run time.
+The reducer attaches usage to the **last assistant turn regardless of `activeId`** (it may
+arrive around the terminal `done`), and threads the tool duration onto the timeline item;
+both land on `Message.metrics` / `ToolActivityItem.durationMs`, so they round-trip through
+history like feedback.
+
+Split of responsibility, so the feature degrades gracefully:
+
+- **Time & TTFT** are measured **client-side** (`MessageMetrics` component): a realtime clock
+  that ticks while streaming, freezes on settle, and captures time-to-first-token when the
+  first content renders. No backend needed. A *reloaded* turn shows these only if the backend
+  persisted `durationMs`/`ttftMs`.
+- **Tokens & cost** are **backend-provided** — Databricks `usage` gives token counts only, so
+  **cost must be sent by the backend** (`cost_usd`); the UI never estimates it. No `usage`
+  frame ⇒ just the client clock is shown.
+
+Because our transport treats the `message` item's `output_item.done` as the terminal (it
+closes the stream), a **live** backend must emit its `usage` frame *before* that terminal item
+for tokens/cost to be captured (the bundled mock, `sse-recordings/default.txt`, is ordered
+that way). Display is gated by `NEXT_PUBLIC_SHOW_USAGE` (default on; opt-out).
+
 ### Assistant markdown via `streamdown` (D-006)
 
 Use `streamdown`, `@streamdown/code`, and `@streamdown/mermaid`. Lakemind already

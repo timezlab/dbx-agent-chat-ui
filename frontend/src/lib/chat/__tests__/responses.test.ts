@@ -93,7 +93,72 @@ describe("createResponsesParser — Databricks Playground Responses → ChatStre
     expect(p.map({ type: "response.created" })).toEqual([]);
     expect(p.map({ type: "response.output_item.added", item: {} })).toEqual([]);
     expect(p.map({ type: "response.output_text.done" })).toEqual([]);
+    // A bare `response.completed` with no usage payload stays a no-op.
     expect(p.map({ type: "response.completed" })).toEqual([]);
     expect(p.map("not an object")).toEqual([]);
+  });
+
+  it("maps response.completed with response.usage → a usage event (tokens + cost)", () => {
+    const p = createResponsesParser();
+    expect(
+      p.map({
+        type: "response.completed",
+        response: {
+          usage: {
+            input_tokens: 812,
+            output_tokens: 391,
+            total_tokens: 1203,
+            cost_usd: 0.0041,
+          },
+        },
+      }),
+    ).toEqual([
+      {
+        type: "usage",
+        inputTokens: 812,
+        outputTokens: 391,
+        totalTokens: 1203,
+        costUsd: 0.0041,
+      },
+    ]);
+  });
+
+  it("reads usage from a top-level `usage` field and from databricks_output", () => {
+    const p = createResponsesParser();
+    expect(
+      p.map({ type: "response.completed", usage: { total_tokens: 42 } }),
+    ).toEqual([{ type: "usage", totalTokens: 42 }]);
+    expect(
+      p.map({ databricks_output: { usage: { input_tokens: 5, output_tokens: 7 } } }),
+    ).toEqual([{ type: "usage", inputTokens: 5, outputTokens: 7 }]);
+  });
+
+  it("carries a backend per-tool duration_ms onto the done tool event", () => {
+    const p = createResponsesParser();
+    p.map({
+      type: "response.output_item.done",
+      item: { type: "function_call", call_id: "toolu_1", name: "grep", arguments: "{}" },
+    });
+    expect(
+      p.map({
+        type: "response.output_item.done",
+        item: {
+          type: "function_call_output",
+          call_id: "toolu_1",
+          output: "ok",
+          duration_ms: 1234,
+        },
+      }),
+    ).toEqual([
+      {
+        type: "tool",
+        id: "toolu_1",
+        name: "grep",
+        args: {},
+        detail: "ok",
+        status: "done",
+        durationMs: 1234,
+      },
+    ]);
   });
 });

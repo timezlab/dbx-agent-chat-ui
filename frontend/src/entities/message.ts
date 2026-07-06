@@ -16,6 +16,24 @@ export const MessageFeedbackSchema = z.object({
 });
 export type MessageFeedback = z.infer<typeof MessageFeedbackSchema>;
 
+/**
+ * Per-reply usage/latency metrics shown under a settled assistant turn. TOKEN/COST/tool-time
+ * are backend-provided (Databricks `response.completed` → `usage`); `durationMs`/`ttftMs` are
+ * end-to-end / time-to-first-token — measured client-side during a live turn (pure UI, see
+ * `MessageMetrics` component), or taken from the backend here so a RELOADED conversation can
+ * still show them. Every field optional: a backend that sends nothing ⇒ only the live client
+ * timer is shown, and history rows simply omit metrics (no field churn — attached optionally).
+ */
+export const MessageMetricsSchema = z.object({
+  inputTokens: z.number().optional(),
+  outputTokens: z.number().optional(),
+  totalTokens: z.number().optional(),
+  costUsd: z.number().optional(), // backend-computed; FE only displays (never estimates)
+  durationMs: z.number().optional(), // end-to-end wall time, if the backend reports it
+  ttftMs: z.number().optional(), // time to first token, if the backend reports it
+});
+export type MessageMetrics = z.infer<typeof MessageMetricsSchema>;
+
 /** Vai trò 1 turn hội thoại. */
 export const MessageRoleSchema = z.enum(["user", "assistant"]);
 export type MessageRole = z.infer<typeof MessageRoleSchema>;
@@ -46,6 +64,9 @@ export const ToolActivityItemSchema = z.object({
   args: z.record(z.string(), z.unknown()).nullable(),
   detail: z.string().nullable(),
   status: z.enum(["running", "done"]),
+  // Per-tool run time (ms), do backend gửi kèm frame kết thúc của tool. Optional ⇒ không
+  // gửi thì không hiện; tránh phải sửa mọi literal `ToolActivityItem` sẵn có.
+  durationMs: z.number().optional(),
 });
 export type ToolActivityItem = z.infer<typeof ToolActivityItemSchema>;
 
@@ -105,6 +126,9 @@ export const MessageSchema = z.object({
   status: MessageStatusSchema,
   error: z.string().nullable(), // chỉ assistant; set khi có error frame
   feedback: MessageFeedbackSchema.nullable(), // chỉ assistant; rating + comment đã lưu
+  // Chỉ assistant; token/cost/latency 1 lượt. Optional (không `.nullable()`) để literal cũ
+  // + history payload thiếu field vẫn hợp lệ; round-trip qua history theo schema=contract.
+  metrics: MessageMetricsSchema.optional(),
   createdAt: z.number(), // thứ tự theo session (clock inject, không Date.now trong pure code)
 });
 export type Message = z.infer<typeof MessageSchema>;

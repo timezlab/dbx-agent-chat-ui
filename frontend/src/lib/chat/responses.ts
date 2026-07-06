@@ -33,6 +33,15 @@ export function createResponsesParser(): ResponsesParser {
       const errorMessage = extractError(event);
       if (errorMessage != null) return [{ type: "error", message: errorMessage }];
 
+      // Usage (tokens/cost) rides the terminal lifecycle frame — `response.completed`
+      // (`response.usage`), a top-level `usage`, or `databricks_output.usage`. Emit a
+      // non-terminal `usage` event; the reducer attaches it to the last assistant turn.
+      // NOTE: `message` item.done is our terminal (it closes the stream), so for a LIVE
+      // backend the usage frame must arrive BEFORE it — the bundled mock is ordered that
+      // way (see sse-recordings/default.txt).
+      const usage = extractUsage(event);
+      if (usage) return [usage];
+
       const type = typeof event.type === "string" ? event.type : "";
 
       switch (type) {
@@ -89,6 +98,7 @@ function mapItemDone(
   if (itemType === "function_call_output") {
     const id = asString(item.call_id) ?? "";
     const prior = calls.get(id);
+    const durationMs = asNumber(item.duration_ms) ?? asNumber(item.run_ms);
     return [
       {
         type: "tool",
@@ -97,6 +107,7 @@ function mapItemDone(
         args: prior?.args ?? null,
         detail: asString(item.output) ?? undefined,
         status: "done",
+        ...(durationMs != null ? { durationMs } : {}),
       },
     ];
   }
@@ -143,10 +154,51 @@ function extractError(event: Record<string, unknown>): string | null {
   return null;
 }
 
+/**
+ * Pull usage (tokens/cost) out of a lifecycle frame. Looks in the three places a
+ * Databricks Responses / ResponsesAgent stream may put it: `response.usage`
+ * (`response.completed`), a top-level `usage`, or `databricks_output.usage`. Maps the
+ * snake_case wire fields → the neutral event, keeping only the numbers actually present.
+ * Returns null when there is no usage to report (so a bare lifecycle frame stays a no-op).
+ */
+function extractUsage(
+  event: Record<string, unknown>,
+): Extract<ChatStreamEvent, { type: "usage" }> | null {
+  const response = isRecord(event.response) ? event.response : undefined;
+  const dbx = isRecord(event.databricks_output)
+    ? event.databricks_output
+    : undefined;
+  const usage =
+    (isRecord(response?.usage) ? response?.usage : undefined) ??
+    (isRecord(event.usage) ? event.usage : undefined) ??
+    (isRecord(dbx?.usage) ? dbx?.usage : undefined);
+  if (!usage) return null;
+
+  const out: Extract<ChatStreamEvent, { type: "usage" }> = { type: "usage" };
+  const inputTokens = asNumber(usage.input_tokens ?? usage.prompt_tokens);
+  const outputTokens = asNumber(usage.output_tokens ?? usage.completion_tokens);
+  const totalTokens = asNumber(usage.total_tokens);
+  const costUsd = asNumber(usage.cost_usd ?? usage.cost);
+  const durationMs = asNumber(usage.duration_ms);
+  const ttftMs = asNumber(usage.ttft_ms);
+  if (inputTokens != null) out.inputTokens = inputTokens;
+  if (outputTokens != null) out.outputTokens = outputTokens;
+  if (totalTokens != null) out.totalTokens = totalTokens;
+  if (costUsd != null) out.costUsd = costUsd;
+  if (durationMs != null) out.durationMs = durationMs;
+  if (ttftMs != null) out.ttftMs = ttftMs;
+  // Nothing numeric parsed ⇒ not a usage frame after all.
+  return Object.keys(out).length > 1 ? out : null;
+}
+
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
 function asString(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
+}
+
+function asNumber(v: unknown): number | undefined {
+  return typeof v === "number" && Number.isFinite(v) ? v : undefined;
 }

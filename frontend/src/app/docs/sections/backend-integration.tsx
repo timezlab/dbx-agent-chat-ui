@@ -126,6 +126,20 @@ export function BackendIntegrationSection() {
             <li>
               <strong className="text-foreground">Tool Call Result:</strong>{" "}
               <InlineCode>{`{"type": "response.output_item.done", "item": {"type": "function_call_output", "call_id": "call_123", "output": "Result string"}}`}</InlineCode>
+              . Add an optional{" "}
+              <InlineCode>&quot;duration_ms&quot;</InlineCode> to the output item
+              to show that tool&apos;s run time on its row.
+            </li>
+            <li>
+              <strong className="text-foreground">
+                Usage &amp; Cost (Optional):
+              </strong>{" "}
+              <InlineCode>{`{"type": "response.completed", "response": {"usage": {"input_tokens": 100, "output_tokens": 50, "total_tokens": 150, "cost_usd": 0.002}}}`}</InlineCode>{" "}
+              — powers the reply&apos;s tokens + cost footer.{" "}
+              <InlineCode>cost_usd</InlineCode> is yours to compute (the UI never
+              estimates it); response time &amp; time-to-first-token are measured in
+              the browser. Emit it <em>before</em> the terminal{" "}
+              <InlineCode>message</InlineCode> item (which closes the stream).
             </li>
             <li>
               <strong className="text-foreground">Error Handling:</strong>{" "}

@@ -31,6 +31,10 @@ export const CapabilityConfigSchema = z.object({
   // false (ẩn hoàn toàn). Non-secret selector (Principle II); parse tại
   // lib/config.ts#parseDevToolsEnabled.
   devToolsEnabled: z.boolean().optional(),
+  // NEXT_PUBLIC_SHOW_USAGE — bật footer usage/metrics (time · TTFT · tokens · cost) mỗi
+  // reply + run-time mỗi tool. Mặc định BẬT (khác các flag opt-in khác); chỉ tắt khi env
+  // set "0"/"false"/"no"/"off". Parse tại lib/config.ts#parseShowUsage.
+  usageEnabled: z.boolean().optional(),
   // NEXT_PUBLIC_DOCS_URL — URL cho tài liệu. Optional; unset ⇒ ẩn icon Docs ở sidebar.
   docsUrl: z.string().optional(),
   // NEXT_PUBLIC_WELCOME_URL — URL cho trang giới thiệu. Optional; unset ⇒ ẩn icon Welcome ở sidebar.

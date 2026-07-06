@@ -143,3 +143,78 @@ describe("reduceStreamEvent — done", () => {
     expect(assistant(c).parts).toEqual([{ type: "text", text: "kept" }]);
   });
 });
+
+describe("reduceStreamEvent — usage metrics", () => {
+  it("attaches usage (tokens + cost) to the active assistant message", () => {
+    let c = streamingConversation();
+    c = reduceStreamEvent(c, { type: "token", delta: "hi" });
+    c = reduceStreamEvent(c, {
+      type: "usage",
+      inputTokens: 100,
+      outputTokens: 50,
+      totalTokens: 150,
+      costUsd: 0.002,
+    });
+
+    expect(assistant(c).metrics).toEqual({
+      inputTokens: 100,
+      outputTokens: 50,
+      totalTokens: 150,
+      costUsd: 0.002,
+    });
+    // Usage is NOT terminal — the turn keeps streaming until `done`.
+    expect(assistant(c).status).toBe("streaming");
+  });
+
+  it("attaches usage to the last assistant turn even after `done` cleared activeId", () => {
+    // A live backend can send `response.completed` (usage) right AROUND the terminal; the
+    // reducer must still land it on the assistant turn, not drop it because activeId is null.
+    let c = streamingConversation();
+    c = reduceStreamEvent(c, { type: "token", delta: "hi" });
+    c = reduceStreamEvent(c, { type: "done" });
+    expect(c.activeId).toBeNull();
+
+    c = reduceStreamEvent(c, { type: "usage", totalTokens: 77 });
+    expect(assistant(c).metrics).toEqual({ totalTokens: 77 });
+  });
+
+  it("merges a later usage frame onto earlier metrics", () => {
+    let c = streamingConversation();
+    c = reduceStreamEvent(c, { type: "usage", totalTokens: 10 });
+    c = reduceStreamEvent(c, { type: "usage", costUsd: 0.01 });
+    expect(assistant(c).metrics).toEqual({ totalTokens: 10, costUsd: 0.01 });
+  });
+
+  it("ignores usage when there is no assistant turn to attach it to", () => {
+    const c: ChatSession = {
+      id: "c0",
+      activeId: null,
+      queue: [],
+      status: "idle",
+      messages: [],
+    };
+    expect(reduceStreamEvent(c, { type: "usage", totalTokens: 5 })).toBe(c);
+  });
+
+  it("carries a tool's backend durationMs through the done merge", () => {
+    let c = streamingConversation();
+    c = reduceStreamEvent(c, {
+      type: "tool",
+      id: "t1",
+      name: "grep",
+      args: { q: "x" },
+      status: "running",
+    });
+    c = reduceStreamEvent(c, {
+      type: "tool",
+      id: "t1",
+      name: "grep",
+      args: { q: "x" },
+      status: "done",
+      durationMs: 1234,
+    });
+
+    const tools = assistant(c).parts.find((p) => p.type === "tools");
+    expect(tools?.type === "tools" && tools.items[0].durationMs).toBe(1234);
+  });
+});

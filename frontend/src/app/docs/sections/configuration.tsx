@@ -23,6 +23,9 @@ NEXT_PUBLIC_SAMPLE_PROMPTS='["Analyze data", "Write SQL"]'
 NEXT_PUBLIC_ENABLE_UPLOAD=true
 NEXT_PUBLIC_DEV_TOOLS=1
 
+# [OPTIONAL] Usage/metrics footer — shown by default; opt OUT with "false"/"0"/"no"/"off"
+NEXT_PUBLIC_SHOW_USAGE=false
+
 # [OPTIONAL] Navigation Links
 NEXT_PUBLIC_DOCS_URL=/docs
 NEXT_PUBLIC_WELCOME_URL=/welcome`;
@@ -69,6 +72,16 @@ export function ConfigurationSection() {
           <InlineCode>DB_SAML_SSO</InlineCode> or <InlineCode>PAT</InlineCode>).
           It renders a read-only user chip in the sidebar footer; unset or a
           failed fetch shows an anonymous placeholder instead.
+        </li>
+        <li>
+          <strong className="text-foreground">Usage &amp; metrics:</strong> Each reply
+          shows a footer with response time, time-to-first-token, tokens, and cost.
+          Time &amp; TTFT are measured in the browser (a realtime clock while streaming);
+          tokens and cost come from the backend&apos;s{" "}
+          <InlineCode>usage</InlineCode> frame (<InlineCode>cost_usd</InlineCode> is
+          backend-computed — the UI never estimates it), and each tool row can show a
+          backend <InlineCode>duration_ms</InlineCode>. Shown by default; set{" "}
+          <InlineCode>NEXT_PUBLIC_SHOW_USAGE=false</InlineCode> to hide the whole footer.
         </li>
       </ul>
     </DocsSection>

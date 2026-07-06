@@ -464,3 +464,22 @@ Add US2 → US4 → US3 → US5, each tested independently and deployable, witho
   request/response format for every endpoint (chat SSE, history list/detail, feedback,
   agents, me), registered in `docs-content.tsx` + `toc.tsx`. Default `.env` already points
   `/api/history` + `/api/feedback` at the mocks.
+- **Per-reply usage/metrics (time · TTFT · tokens · cost · per-tool run-time) (2026-07-06)**:
+  Added a metrics footer under each settled assistant turn plus a realtime clock while it
+  streams. Two sources, so it degrades gracefully: **time & TTFT are client-measured**
+  (`components/chat/messages/message-metrics.tsx` — ticks while streaming, freezes on settle,
+  captures time-to-first-token on first content), while **tokens & cost are backend-provided**
+  and **cost must be sent by the backend** (`cost_usd`; the UI never estimates — Databricks
+  `usage` carries token counts only). New neutral event `{ type: "usage", … }` +
+  `durationMs?` on the `tool` event (`entities/transport.ts`); `responses.ts` maps
+  `response.completed` / `usage` / `databricks_output.usage` → `usage`, and reads a
+  `function_call_output` `duration_ms` for per-tool time; `reducer.ts` attaches usage to the
+  **last assistant turn regardless of `activeId`** (it arrives around the terminal) onto a new
+  optional `Message.metrics` (`MessageMetricsSchema`) that round-trips through history, and
+  threads tool `durationMs` onto `ToolActivityItem`. Because the `message` item's
+  `output_item.done` is our terminal, the bundled mock (`sse-recordings/default.txt`) emits its
+  `usage` frame *before* it, and tool outputs carry `duration_ms`. Pure formatters in
+  `lib/chat/metrics.ts`. Gated by **`NEXT_PUBLIC_SHOW_USAGE`** (default **on**, opt-out;
+  `config.ts` `parseShowUsage` → `usageEnabled`, threaded via `ChatProvider` → `MessageList` →
+  `AssistantMessage`). Cost/token icons use `react-icons` (`FaMoneyBillWave`, `TbCoin`).
+  See [`chat-transport.md`](../../../docs/design-docs/chat-transport.md) › *Usage / metrics events*.

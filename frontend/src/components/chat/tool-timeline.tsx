@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { type ToolActivityItem, TodoSchema } from "@/entities";
 import { cn } from "@/lib/utils";
+import { formatDuration } from "@/lib/chat/metrics";
 import {
   Collapsible,
   CollapsibleContent,
@@ -101,6 +102,16 @@ function ToolRow({
             className={cn("min-w-0 truncate font-normal", mono && "font-mono")}
           >
             {subtitle}
+          </span>
+        ) : null}
+        {item.durationMs != null ? (
+          // Per-tool run time, when the backend reports it (optional). Sits at the row end,
+          // muted, so a settled tool reads "grep · content · 1.2s".
+          <span
+            data-slot="tool-duration"
+            className="ml-auto shrink-0 pl-2 font-normal tabular-nums text-muted-foreground/70"
+          >
+            {formatDuration(item.durationMs)}
           </span>
         ) : null}
         <ChevronRightIcon

@@ -21,6 +21,8 @@ export interface MessageListProps extends React.ComponentProps<"div"> {
   onFeedback?: (feedback: Feedback) => void | Promise<void>;
   /** Call id of the conversation's first `write_todos` (→ "Create plan"). */
   firstPlanCallId?: string | null;
+  /** Show the per-reply usage/metrics footer (time · TTFT · tokens · cost). Default true. */
+  showMetrics?: boolean;
 }
 
 /**
@@ -32,6 +34,7 @@ export function MessageList({
   messages,
   onFeedback,
   firstPlanCallId,
+  showMetrics = true,
   className,
   ...props
 }: MessageListProps) {
@@ -67,6 +70,7 @@ export function MessageList({
                     message={message}
                     onFeedback={onFeedback}
                     firstPlanCallId={firstPlanCallId}
+                    showMetrics={showMetrics}
                   />
                 )}
               </MessageScrollerItem>

@@ -18,6 +18,7 @@ export function resolveConfig(): CapabilityConfig {
     uploadAccept: parseUploadAccept(env.NEXT_PUBLIC_UPLOAD_ACCEPT),
     uploadMaxSizeBytes: parseUploadMaxSizeMb(env.NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB),
     devToolsEnabled: parseDevToolsEnabled(env.NEXT_PUBLIC_DEV_TOOLS),
+    usageEnabled: parseShowUsage(env.NEXT_PUBLIC_SHOW_USAGE),
     docsUrl: resolveDeploymentUrl(env.NEXT_PUBLIC_DOCS_URL),
     welcomeUrl: resolveDeploymentUrl(env.NEXT_PUBLIC_WELCOME_URL),
   });
@@ -93,6 +94,18 @@ export function parseUploadEnabled(raw: string | undefined): boolean {
 export function parseDevToolsEnabled(raw: string | undefined): boolean {
   if (!raw) return false;
   return ["1", "true", "yes"].includes(raw.trim().toLowerCase());
+}
+
+/**
+ * Parse `NEXT_PUBLIC_SHOW_USAGE` into a boolean — inverted default vs the opt-in flags
+ * above. The usage/metrics footer is a UX feature meant to be visible, so it is ON unless
+ * EXPLICITLY disabled with "0"/"false"/"no"/"off" (case-insensitive, trimmed). Unset/blank
+ * or anything else ⇒ true.
+ */
+export function parseShowUsage(raw: string | undefined): boolean {
+  const trimmed = raw?.trim().toLowerCase();
+  if (!trimmed) return true;
+  return !["0", "false", "no", "off"].includes(trimmed);
 }
 
 /** Default accept list when `NEXT_PUBLIC_UPLOAD_ACCEPT` is unset — images only. */

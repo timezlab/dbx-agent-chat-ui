@@ -34,6 +34,9 @@ export type ChatRequest = z.infer<typeof ChatRequestSchema>;
  * - token     → nối text.
  * - reasoning → kênh "thinking" (Databricks reasoning models), tách khỏi token.
  * - tool      → hoạt động tool; mang raw `name` + `args` đã parse (D12), ghép start↔end theo `id`.
+ *               `durationMs` (optional) = thời gian chạy tool, do backend gửi trên frame kết thúc.
+ * - usage     → số liệu token/cost 1 lượt (do backend gửi, `response.completed`); KHÔNG terminal,
+ *               reducer gắn vào assistant message cuối. Thiếu frame ⇒ đơn giản là không có số.
  * - error / done → terminal.
  */
 export const ChatStreamEventSchema = z.discriminatedUnion("type", [
@@ -46,6 +49,16 @@ export const ChatStreamEventSchema = z.discriminatedUnion("type", [
     args: z.record(z.string(), z.unknown()).nullish(),
     detail: z.string().optional(),
     status: z.enum(["running", "done"]),
+    durationMs: z.number().optional(),
+  }),
+  z.object({
+    type: z.literal("usage"),
+    inputTokens: z.number().optional(),
+    outputTokens: z.number().optional(),
+    totalTokens: z.number().optional(),
+    costUsd: z.number().optional(),
+    durationMs: z.number().optional(),
+    ttftMs: z.number().optional(),
   }),
   z.object({ type: z.literal("error"), message: z.string() }),
   z.object({ type: z.literal("done") }),

@@ -47,6 +47,7 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
     replaySetTiming,
     replayResetTiming,
     replaySetSpeed,
+    usageEnabled,
   } = useChatContext();
   const todos = selectLatestTodos(messages);
   const firstPlanCallId = firstTodoWriteCallId(messages);
@@ -98,6 +99,7 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
           messages={messages}
           onFeedback={submitFeedback}
           firstPlanCallId={firstPlanCallId}
+          showMetrics={usageEnabled}
           className="min-h-0 flex-1"
         />
       )}

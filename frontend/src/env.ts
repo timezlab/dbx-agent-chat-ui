@@ -61,6 +61,12 @@ export const env = createEnv({
     // sets it, a customer-facing deploy leaves it off. See FR-026.
     NEXT_PUBLIC_DEV_TOOLS: z.string().optional(),
 
+    // Toggle the per-reply usage/metrics footer (time · TTFT · tokens · cost) and the
+    // per-tool run-time. Shown by DEFAULT (this is a UX feature, not a risky capability);
+    // set to "0"/"false"/"no"/"off" (case-insensitive) to hide it — e.g. a customer-facing
+    // deploy that shouldn't surface token/cost. Parsed in lib/config#parseShowUsage.
+    NEXT_PUBLIC_SHOW_USAGE: z.string().optional(),
+
     // Host-provided REST endpoint for documentation link. Unset ⇒ hides docs icon.
     NEXT_PUBLIC_DOCS_URL: endpointUrl.optional(),
 
@@ -78,6 +84,7 @@ export const env = createEnv({
     NEXT_PUBLIC_UPLOAD_ACCEPT: process.env.NEXT_PUBLIC_UPLOAD_ACCEPT,
     NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB: process.env.NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB,
     NEXT_PUBLIC_DEV_TOOLS: process.env.NEXT_PUBLIC_DEV_TOOLS,
+    NEXT_PUBLIC_SHOW_USAGE: process.env.NEXT_PUBLIC_SHOW_USAGE,
     NEXT_PUBLIC_DOCS_URL: process.env.NEXT_PUBLIC_DOCS_URL,
     NEXT_PUBLIC_WELCOME_URL: process.env.NEXT_PUBLIC_WELCOME_URL,
   },
