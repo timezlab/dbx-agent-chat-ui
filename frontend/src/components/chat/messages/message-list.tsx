@@ -42,14 +42,15 @@ export function MessageList({
     // `scrollEdgeThreshold` = how close to the bottom still counts as "pinned". The
     // primitive default (8px) is far too tight for a streaming chat — a user reading a
     // few lines up (~250px) would lose the follow. Widen it so streaming stays glued
-    // unless the user scrolls well up.
+    // unless the user scrolls well up (a large window ⇒ the follow only releases on a
+    // deliberate scroll-up, not a small nudge while a fast stream reflows the viewport).
     //
     // NO `scrollAnchor` on items: marking the latest turn as an anchor makes the primitive
     // pin it near the TOP and reserve a dynamic hidden spacer below it — which, when a turn
     // shrinks (a tool-call group collapses), GROWS the empty space to keep the anchor pinned,
     // leaving a phantom-tall height until you scroll. Classic bottom-anchored chat instead:
     // the timeline height always tracks content, so a collapse shrinks it immediately.
-    <MessageScrollerProvider autoScroll scrollEdgeThreshold={350}>
+    <MessageScrollerProvider autoScroll scrollEdgeThreshold={550}>
       <MessageScroller
         data-slot="message-list"
         className={cn("flex-1", className)}
