@@ -35,8 +35,6 @@ export function MessageList({
   className,
   ...props
 }: MessageListProps) {
-  const lastId = messages.length ? messages[messages.length - 1].id : null;
-
   return (
     // `autoScroll` arms the sticky-bottom follow: while pinned to the end the scroller
     // keeps chasing new tokens, and it releases the moment the user scrolls up. Without
@@ -45,6 +43,12 @@ export function MessageList({
     // primitive default (8px) is far too tight for a streaming chat — a user reading a
     // few lines up (~250px) would lose the follow. Widen it so streaming stays glued
     // unless the user scrolls well up.
+    //
+    // NO `scrollAnchor` on items: marking the latest turn as an anchor makes the primitive
+    // pin it near the TOP and reserve a dynamic hidden spacer below it — which, when a turn
+    // shrinks (a tool-call group collapses), GROWS the empty space to keep the anchor pinned,
+    // leaving a phantom-tall height until you scroll. Classic bottom-anchored chat instead:
+    // the timeline height always tracks content, so a collapse shrinks it immediately.
     <MessageScrollerProvider autoScroll scrollEdgeThreshold={350}>
       <MessageScroller
         data-slot="message-list"
@@ -54,10 +58,7 @@ export function MessageList({
         <MessageViewport>
           <MessageScrollerContent className="mx-auto w-full max-w-3xl px-4 py-6">
             {messages.map((message) => (
-              <MessageScrollerItem
-                key={message.id}
-                scrollAnchor={message.id === lastId}
-              >
+              <MessageScrollerItem key={message.id}>
                 {message.role === "user" ? (
                   <UserMessage message={message} />
                 ) : (

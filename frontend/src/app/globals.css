@@ -197,6 +197,9 @@
    tracks light/dark automatically without extra tokens. Applied via the `os-theme-tz`
    theme name passed to OverlayScrollbars instances. */
 .os-theme-tz {
+  /* The theme class lands on the `.os-scrollbar` element (position: absolute). Lift it above
+     scrolled content so an opaque row hover/active fill can't paint over the bar. */
+  z-index: 9999;
   --os-size: 8px;
   --os-padding-perpendicular: 1px;
   --os-padding-axis: 2px;

@@ -31,15 +31,36 @@ export function MessageViewport({
       // dim-idle / bright-on-hover two-state comes from the handle color alone (os-theme-tz).
       scrollbars: { theme: "os-theme-tz", autoHide: "never" },
       overflow: { x: "hidden", y: "scroll" },
+      // No `update.debounce`: on a continuous stream (a token per frame) OS's debounce does
+      // NOT smooth — it SAMPLES the scroll size at arbitrary `maxWait` points, so the handle
+      // jumps to whatever height existed at each sample. Debounce is for CSS-animation jank
+      // (issue #744), not token streaming. The real fix is the content element below.
     },
   });
 
   React.useEffect(() => {
-    const el = wrapRef.current?.querySelector<HTMLElement>(
+    const wrap = wrapRef.current;
+    const el = wrap?.querySelector<HTMLElement>(
       "[data-slot=message-scroller-viewport]",
     );
-    if (!el) return;
-    initialize({ target: el, elements: { viewport: el, content: false } });
+    if (!wrap || !el) return;
+    // `scrollbars.slot: wrap` mounts the scrollbar in the OUTER wrapper, NOT inside the
+    // scrolled element (OS's default when the viewport is the target). Inside the scroller,
+    // OS keeps the absolutely-positioned `.os-scrollbar` (≈viewport-tall) glued in place by
+    // translating it with `transform: translateY(≈scrollTop)` on every update — and a
+    // transformed descendant EXTENDS the scrollable overflow. That is invisible while
+    // content only grows, but when a turn SHRINKS (a tool-call group collapses) the stale
+    // translated bar keeps scrollHeight pinned at `old scrollTop + viewport height`,
+    // leaving real phantom space below the messages — self-sustaining, because OS re-measures
+    // the very overflow its own bar creates (it only drains as you scroll up). With the bar
+    // outside the scroller, OS skips that translate entirely and the scroller's height is
+    // purely its content again. (`elements.content` is NOT used: OS silently ignores it when
+    // the viewport is the target, so it can't help here.)
+    initialize({
+      target: el,
+      elements: { viewport: el },
+      scrollbars: { slot: wrap },
+    });
     return () => getInstance()?.destroy();
   }, [initialize, getInstance]);
 
@@ -48,9 +69,9 @@ export function MessageViewport({
       <MessageScrollerPrimitive.Viewport
         data-slot="message-scroller-viewport"
         className={cn(
-          // No `scroll-fade-b` here: it applies a bottom mask-image gradient to the whole
-          // viewport, and since OverlayScrollbars mounts the bar INSIDE the viewport, the
-          // mask fades the scrollbar too (it looks like a gradient handle).
+          // No `scroll-fade-b` here: a bottom mask-image gradient on the viewport fades
+          // whatever paints near its bottom edge — it read as a gradient scrollbar handle
+          // when the bar lived inside the viewport, and it still dims the last message line.
           "size-full min-h-0 min-w-0 overflow-y-auto overscroll-contain contain-content",
           className,
         )}

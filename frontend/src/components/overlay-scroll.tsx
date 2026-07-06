@@ -40,7 +40,14 @@ export function OverlayScroll({
   React.useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    initialize({ target: el, elements: { viewport: el, content: false } });
+    // Viewport = the element itself; OS silently ignores `elements.content` in this mode, so
+    // don't pass it. Known limit (see docs/tech-debt-tracker.md): in this mode OS mounts the
+    // bar INSIDE the scroller and keeps it in place with `translateY(≈scrollTop)`, and that
+    // transformed bar extends the scrollable overflow — so content that SHRINKS while
+    // scrolled leaves phantom scroll space until the user scrolls up. Fine here because
+    // every consumer's content only grows or is static; the message viewport (where turns
+    // do shrink) mounts the bar outside via `scrollbars.slot` instead.
+    initialize({ target: el, elements: { viewport: el } });
     return () => getInstance()?.destroy();
   }, [initialize, getInstance]);
 

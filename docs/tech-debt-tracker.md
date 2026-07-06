@@ -21,6 +21,20 @@ Source: [`references/databricks-research.md`](./references/databricks-research.m
 - A special allowlist of file extensions for an Apps source directory.
 - A maximum number of files specifically for an Apps deployment.
 
+## Known limitations (accepted, revisit if the trigger appears)
+
+- **OverlayScrollbars viewport-is-target + shrinking content ⇒ phantom scroll space.**
+  When OS is initialized with the element itself as viewport (our `OverlayScroll`,
+  sidebar-content, per-table overlays), it mounts `.os-scrollbar` inside the scroller and
+  pins it with `translateY(≈scrollTop)`; the transformed bar extends scrollable overflow,
+  so content that shrinks while scrolled keeps `scrollHeight` stuck at the old value until
+  the user scrolls up (OS re-measures the overflow its own bar creates). The message
+  viewport avoids this by mounting the bar outside the scroller via `scrollbars.slot`
+  (`message-viewport.tsx`); the remaining consumers only ever grow or are static.
+  **Trigger to fix**: any feature that shrinks a scrolled OS region in place (e.g. deleting
+  a conversation from the history list) — give that region an outer positioned wrapper and
+  pass it as `scrollbars.slot`.
+
 ## Deferred work (tracked, not yet scheduled)
 
 Deferred past v1 per [`DESIGN.md`](./DESIGN.md): Lakebase history, MLflow feedback

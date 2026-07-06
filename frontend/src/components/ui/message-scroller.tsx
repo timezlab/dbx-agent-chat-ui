@@ -72,10 +72,14 @@ function MessageScrollerItem({
     <MessageScrollerPrimitive.Item
       data-slot="message-scroller-item"
       scrollAnchor={scrollAnchor}
-      className={cn(
-        "min-w-0 shrink-0 [contain-intrinsic-size:auto_10rem] [content-visibility:auto]",
-        className
-      )}
+      // No `content-visibility:auto` (+ `contain-intrinsic-size`): it skips layout of
+      // off-screen items and reports their REMEMBERED/estimated height, so when a live turn
+      // shrinks (a tool-call group collapses when the tool finishes) the viewport keeps the
+      // stale, taller `scrollHeight` and only corrects as each item re-enters view on scroll
+      // — the documented "dancing/accordion scrollbars" of content-visibility (it affects a
+      // native scrollbar too, so OverlayScrollbars can't compensate). Conversations here are
+      // bounded, so accurate live scroll height beats the off-screen render-skipping.
+      className={cn("min-w-0 shrink-0", className)}
       {...props}
     />
   )
