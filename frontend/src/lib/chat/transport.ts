@@ -85,6 +85,11 @@ export function streamSSE(options: StreamSSEOptions): AbortController {
   const maxRetries = 3;
 
   let closed = false;
+  // The `message` item finalizes the reply's CONTENT, but the stream is NOT over: the real
+  // Responses protocol emits a trailing `response.completed` (usage: tokens/cost/duration/
+  // ttft) and often `[DONE]` AFTER it. We must keep reading past the content terminal to catch
+  // that usage frame — so record that we saw it rather than aborting on the spot.
+  let sawTerminal = false;
   const close = (reason: "done" | "error" | "abort") => {
     if (closed) return;
     closed = true;
@@ -137,23 +142,35 @@ export function streamSSE(options: StreamSSEOptions): AbortController {
       }
       for (const event of parser.map(json)) {
         handlers.onEvent(event);
-        if (event.type === "done") return finish("done");
         if (event.type === "error") return finish("error");
+        // Content terminal (`message` item). Finalize the reply in the UI but DON'T abort —
+        // keep reading so a trailing `response.completed` (usage) still reaches the reducer.
+        // The stream ends for real on `[DONE]` above, or on onclose (server ends the body).
+        if (event.type === "done") sawTerminal = true;
       }
     },
     onclose() {
       // Reaching onclose means getBytes() returned — the server ended the
-      // response body. If we already saw a terminal frame ([DONE]/done/error),
-      // we're done. Otherwise the stream was cut short (e.g. the FastAPI proxy
-      // closing before its 10-min timeout): fetch-event-source only reconnects
-      // from the catch/onerror path, so throw to route there instead of
-      // resolving silently (which would hang the UI with no terminal event).
+      // response body. A clean end AFTER the content terminal (`message`) — including the
+      // trailing usage frame, and backends that omit the `[DONE]` sentinel (e.g. the mock) —
+      // is a normal completion. Otherwise the stream was cut short (e.g. the FastAPI proxy
+      // closing before its 10-min timeout): fetch-event-source only reconnects from the
+      // catch/onerror path, so throw to route there instead of resolving silently (which
+      // would hang the UI with no terminal event).
       if (closed) return;
+      if (sawTerminal) return close("done");
       throw new Error("Server closed stream before completion");
     },
     onerror(err) {
       if (controller.signal.aborted) {
         close("abort");
+        throw err;
+      }
+
+      // A transport hiccup AFTER the content terminal: the reply is already complete, so
+      // finalize as done — reconnecting would replay the whole turn against the backend.
+      if (sawTerminal) {
+        close("done");
         throw err;
       }
 

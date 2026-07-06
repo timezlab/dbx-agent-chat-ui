@@ -35,10 +35,10 @@ export function createResponsesParser(): ResponsesParser {
 
       // Usage (tokens/cost) rides the terminal lifecycle frame — `response.completed`
       // (`response.usage`), a top-level `usage`, or `databricks_output.usage`. Emit a
-      // non-terminal `usage` event; the reducer attaches it to the last assistant turn.
-      // NOTE: `message` item.done is our terminal (it closes the stream), so for a LIVE
-      // backend the usage frame must arrive BEFORE it — the bundled mock is ordered that
-      // way (see sse-recordings/default.txt).
+      // non-terminal `usage` event; the reducer attaches it to the last assistant turn
+      // regardless of streaming state. It typically arrives AFTER the `message` content
+      // terminal (real Responses order: message → response.completed → [DONE]); the SSE
+      // client keeps reading past the message item so this frame is not dropped (transport.ts).
       const usage = extractUsage(event);
       if (usage) return [usage];
 

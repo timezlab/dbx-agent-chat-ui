@@ -16,9 +16,20 @@ export function formatDuration(ms: number): string {
   return `${m}m ${s}s`;
 }
 
-/** Token count with thousands separators (`1,203`). Fixed en-US grouping so it is stable. */
+/**
+ * Compact token count so large usage stays short: `556`, `1.2k`, `18k`, `1.9M`. Backends can
+ * report millions of tokens (large context / cached prompts), which would overflow the footer
+ * with full grouping — so abbreviate at 1k+. Exact below 1,000; fixed en-US so it is stable.
+ */
 export function formatTokens(n: number): string {
-  return Math.round(n).toLocaleString("en-US");
+  const v = Math.round(Number.isFinite(n) && n > 0 ? n : 0);
+  if (v < 1000) return `${v}`;
+  if (v < 1_000_000) {
+    const k = v / 1000;
+    return `${k < 10 ? k.toFixed(1) : Math.round(k)}k`;
+  }
+  const m = v / 1_000_000;
+  return `${m < 10 ? m.toFixed(1) : Math.round(m)}M`;
 }
 
 /** Cost in USD: `$0.0041` for sub-dollar (4 dp), `$1.23` at a dollar and up (2 dp). */

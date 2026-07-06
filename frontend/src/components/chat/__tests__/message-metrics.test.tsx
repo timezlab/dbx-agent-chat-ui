@@ -23,7 +23,7 @@ describe("MessageMetrics", () => {
     const metrics: Metrics = { totalTokens: 1203, costUsd: 0.0041 };
     render(<MessageMetrics message={assistant({ metrics })} streaming={false} />);
 
-    expect(screen.getByText("1,203 tokens")).toBeInTheDocument();
+    expect(screen.getByText("1.2k tokens")).toBeInTheDocument();
     expect(screen.getByText("$0.0041")).toBeInTheDocument();
   });
 

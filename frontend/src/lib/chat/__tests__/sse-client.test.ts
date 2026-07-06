@@ -155,6 +155,51 @@ describe("streamSSE (live SSE client, injected fetch)", () => {
     expect(c.events.at(-1)).toEqual({ type: "done" });
   });
 
+  it("captures a usage frame that arrives AFTER the message terminal", async () => {
+    const c = collect();
+    // Real Responses order: message (content terminal) → response.completed (usage) → [DONE].
+    // The client must keep reading past the message item, or the usage is dropped (shows only
+    // after a reload, from persisted history).
+    const withTrailingUsage = [
+      'data: {"type":"response.output_text.delta","item_id":"m","delta":"Hello"}',
+      "",
+      'data: {"type":"response.output_item.done","item":{"id":"m","type":"message","content":[{"text":"Hello"}]}}',
+      "",
+      'data: {"type":"response.completed","response":{"usage":{"input_tokens":1893936,"output_tokens":556,"total_tokens":1894492,"duration_ms":7326,"ttft_ms":2927}}}',
+      "",
+      "data: [DONE]",
+      "",
+      "",
+    ].join("\n");
+    const fetchImpl = vi.fn(
+      async () => sseResponse(withTrailingUsage),
+    ) as unknown as typeof fetch;
+
+    streamSSE({
+      url: "https://agent.example/invocations",
+      body: { messages: [] },
+      handlers: c.handlers,
+      fetchImpl,
+    });
+    await until(() => c.closeReason !== undefined);
+
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(c.events).toContainEqual({
+      type: "usage",
+      inputTokens: 1893936,
+      outputTokens: 556,
+      totalTokens: 1894492,
+      durationMs: 7326,
+      ttftMs: 2927,
+    });
+    // The usage event lands after the content terminal, not before it.
+    const doneIdx = c.events.findIndex((e) => e.type === "done");
+    const usageIdx = c.events.findIndex((e) => e.type === "usage");
+    expect(doneIdx).toBeGreaterThanOrEqual(0);
+    expect(usageIdx).toBeGreaterThan(doneIdx);
+    expect(c.closeReason).toBe("done");
+  });
+
   it("closes 'abort' when the returned controller is aborted", async () => {
     const c = collect();
     // A never-ending stream so we abort mid-flight.

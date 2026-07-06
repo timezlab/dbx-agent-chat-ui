@@ -21,9 +21,12 @@ describe("metrics formatters", () => {
     expect(formatDuration(600_000)).toBe("10m 0s");
   });
 
-  it("groups token counts", () => {
-    expect(formatTokens(1203)).toBe("1,203");
+  it("abbreviates token counts (exact under 1k, then k / M)", () => {
     expect(formatTokens(42)).toBe("42");
+    expect(formatTokens(556)).toBe("556");
+    expect(formatTokens(1203)).toBe("1.2k");
+    expect(formatTokens(18_000)).toBe("18k");
+    expect(formatTokens(1_894_492)).toBe("1.9M");
   });
 
   it("formats cost with 4 dp under a dollar and 2 dp at/above", () => {
