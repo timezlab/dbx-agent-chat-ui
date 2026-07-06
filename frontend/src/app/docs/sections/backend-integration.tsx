@@ -134,11 +134,14 @@ export function BackendIntegrationSection() {
               <strong className="text-foreground">
                 Usage &amp; Cost (Optional):
               </strong>{" "}
-              <InlineCode>{`{"type": "response.completed", "response": {"usage": {"input_tokens": 100, "output_tokens": 50, "total_tokens": 150, "cost_usd": 0.002}}}`}</InlineCode>{" "}
+              <InlineCode>{`{"type": "response.completed", "response": {"usage": {"input_tokens": 100, "output_tokens": 50, "total_tokens": 150, "cost_usd": 0.002, "duration_ms": 42600, "ttft_ms": 1840}}}`}</InlineCode>{" "}
               — powers the reply&apos;s tokens + cost footer.{" "}
               <InlineCode>cost_usd</InlineCode> is yours to compute (the UI never
-              estimates it); response time &amp; time-to-first-token are measured in
-              the browser. Emit it <em>before</em> the terminal{" "}
+              estimates it). Response time &amp; time-to-first-token are measured in
+              the browser, so <InlineCode>duration_ms</InlineCode> /{" "}
+              <InlineCode>ttft_ms</InlineCode> are optional — send them only if you
+              want a <em>reloaded</em> conversation to show total time &amp; TTFT too.
+              Emit it <em>before</em> the terminal{" "}
               <InlineCode>message</InlineCode> item (which closes the stream).
             </li>
             <li>

@@ -199,6 +199,23 @@ function addReasoning(text) {
   }
 }
 
+// Per-tool run time (ms), keyed by tool name → attached to each tool's output frame as
+// `duration_ms` so the UI shows it on the tool row (and a reloaded conversation keeps it).
+// Every call of a given tool reports the same realistic duration; a tool absent here simply
+// omits the field (optional on the wire).
+const TOOL_DURATION_MS = {
+  write_todos: 40,
+  read_file: 120,
+  grep: 260,
+  vector_search: 480,
+  web_search: 1300,
+  web_fetch: 900,
+  task: 2100,
+  execute_sql: 640,
+  create_chart: 150,
+  write_to_file: 210,
+};
+
 function addFc(callId, name, args, output = null) {
   events.push(
     JSON.stringify({
@@ -215,6 +232,7 @@ function addFc(callId, name, args, output = null) {
     }),
   );
   if (output) {
+    const durationMs = TOOL_DURATION_MS[name];
     events.push(
       JSON.stringify({
         type: "response.output_item.done",
@@ -223,6 +241,7 @@ function addFc(callId, name, args, output = null) {
           type: "function_call_output",
           call_id: `toolu_${callId}`,
           output,
+          ...(durationMs != null ? { duration_ms: durationMs } : {}),
         },
       }),
     );
@@ -548,6 +567,26 @@ const outputText = `## GlobalTech — Business Performance Overview YTD Jan–Ma
 `;
 
 addOutput(outputText);
+
+// Usage / metrics for the reply (per-reply footer). tokens + cost are backend-only (the UI
+// can't derive them); duration_ms + ttft_ms are OPTIONAL — the live client clock measures
+// them while streaming, but sending them here means a RELOADED conversation still shows total
+// time + TTFT. MUST arrive BEFORE the terminal `message` item, which closes the stream.
+events.push(
+  JSON.stringify({
+    type: "response.completed",
+    response: {
+      usage: {
+        input_tokens: 8450,
+        output_tokens: 2130,
+        total_tokens: 10580,
+        cost_usd: 0.0623,
+        duration_ms: 42600,
+        ttft_ms: 1840,
+      },
+    },
+  }),
+);
 
 events.push(
   JSON.stringify({

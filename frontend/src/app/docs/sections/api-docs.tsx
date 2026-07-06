@@ -98,10 +98,13 @@ data: {"type": "response.output_item.done", "item": {"type": "function_call_outp
   "call_id": "c1", "output": "[{...rows...}]", "duration_ms": 640}}
 
 // OPTIONAL usage — tokens + cost for the reply (shown in the metrics footer). Cost is
-// backend-provided; the UI never estimates it. Also read from a top-level "usage" or
+// backend-provided; the UI never estimates it. "duration_ms"/"ttft_ms" are OPTIONAL: the
+// browser already measures total time + TTFT live, but sending them here lets a RELOADED
+// conversation still show them. Also read from a top-level "usage" or
 // "databricks_output.usage". MUST arrive BEFORE the terminal "message" item below.
 data: {"type": "response.completed", "response": {"usage": {"input_tokens": 8450,
-  "output_tokens": 2130, "total_tokens": 10580, "cost_usd": 0.0623}}}
+  "output_tokens": 2130, "total_tokens": 10580, "cost_usd": 0.0623,
+  "duration_ms": 42600, "ttft_ms": 1840}}}
 
 // TERMINAL — the "message" item closes the turn (text already streamed via the
 // deltas above is NOT re-read from it).
@@ -175,6 +178,7 @@ type Message = {
                                       // Attachment — see the chat request types
   error: string | null;               // assistant only; the stream's error message
   feedback: MessageFeedback | null;   // assistant only; null until rated
+  metrics?: MessageMetrics;           // assistant only; usage/latency footer — omit if none
   createdAt: number;                  // epoch ms; orders turns within a conversation
 };
 
@@ -198,6 +202,20 @@ type MessageFeedback = {
   rating: "up" | "down";
   comment?: string;                       // optional free text
   submittedAt?: number;                   // optional, epoch ms of the last submit
+};
+
+// Per-reply usage/latency for the metrics footer. Every field optional — a turn omits what
+// the backend didn't record. NOTE: camelCase here (the STORED shape), unlike the snake_case
+// SSE "usage" frame (input_tokens / cost_usd / duration_ms / ttft_ms). tokens + cost are
+// backend values; durationMs / ttftMs are optional — the browser measures time + TTFT live,
+// so persist them only if a reloaded turn should still show total time + TTFT.
+type MessageMetrics = {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  costUsd?: number;                       // backend-computed; the UI never estimates it
+  durationMs?: number;                    // total response time (ms)
+  ttftMs?: number;                        // time to first token (ms)
 };`;
 
 const HISTORY_DETAIL = `GET {NEXT_PUBLIC_HISTORY_API_URL}/{id}   // e.g. /api/history/conv-delta-sql
@@ -233,6 +251,14 @@ const HISTORY_DETAIL = `GET {NEXT_PUBLIC_HISTORY_API_URL}/{id}   // e.g. /api/hi
       "attachments": [],
       "error": null,
       "createdAt": 1735732805000,
+      "metrics": {
+        "inputTokens": 1240,
+        "outputTokens": 320,
+        "totalTokens": 1560,
+        "costUsd": 0.0038,
+        "durationMs": 4200,
+        "ttftMs": 210
+      },
       "feedback": {
         "rating": "up",
         "comment": "Exactly what I needed.",
@@ -382,7 +408,13 @@ export function ApiDocsSection() {
             (text, tool runs, reasoning interleaved) so a restored turn replays
             the same activity timeline, and each assistant message carries its own{" "}
             <InlineCode>feedback</InlineCode> object (rating + optional comment),
-            so a restored reply shows the saved thumbs and note.
+            so a restored reply shows the saved thumbs and note. An optional{" "}
+            <InlineCode>metrics</InlineCode> object (camelCase{" "}
+            <InlineCode>inputTokens</InlineCode> / <InlineCode>costUsd</InlineCode> /{" "}
+            <InlineCode>durationMs</InlineCode> / <InlineCode>ttftMs</InlineCode>…) restores
+            the usage footer — persist <InlineCode>durationMs</InlineCode> /{" "}
+            <InlineCode>ttftMs</InlineCode> so a reloaded reply still shows total time &amp;
+            TTFT (the browser only measures those live).
           </p>
           <CodeBlock
             title="Types"
