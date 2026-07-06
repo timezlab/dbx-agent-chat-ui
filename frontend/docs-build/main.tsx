@@ -8,15 +8,21 @@ import "./inter.css";
 // Shares components from src/ but avoids Next.js runtime assumptions.
 const [
   { default: DocsPage },
-  { ThemeProvider }
+  { ThemeProvider },
+  { Providers }
 ] = await Promise.all([
   import("../src/app/docs/page"),
-  import("../src/components/theme/theme-provider")
+  import("../src/components/theme/theme-provider"),
+  import("../src/app/providers")
 ]);
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing #root element");
 
+// Mirror `app/layout.tsx`: ThemeProvider → Providers → page. The docs page embeds a
+// live chat demo whose `ChatProvider` calls `useHistoryMutations()` → `useQueryClient()`,
+// which throws "No QueryClient set" without this provider (history stays disabled here
+// since the demo config has no historyUrl — the client just needs to exist).
 createRoot(root).render(
   <StrictMode>
     <ThemeProvider
@@ -25,7 +31,9 @@ createRoot(root).render(
       enableSystem
       disableTransitionOnChange
     >
-      <DocsPage />
+      <Providers>
+        <DocsPage />
+      </Providers>
     </ThemeProvider>
   </StrictMode>
 );

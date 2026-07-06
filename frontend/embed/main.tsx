@@ -9,15 +9,21 @@ import "./inter.css";
 // Components are imported lazily to keep the initial bundle small.
 const [
   { AppShell },
-  { ThemeProvider }
+  { ThemeProvider },
+  { Providers }
 ] = await Promise.all([
   import("../src/components/shell/app-shell"),
-  import("../src/components/theme/theme-provider")
+  import("../src/components/theme/theme-provider"),
+  import("../src/app/providers")
 ]);
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing #root element");
 
+// Mirror the Next.js `app/layout.tsx` nesting exactly: ThemeProvider → Providers →
+// app. `Providers` supplies the TanStack `QueryClient` the history hooks need (without
+// it the sidebar's `useInfiniteQuery` throws "No QueryClient set") and rehydrates the
+// persisted session store, so this pure-client embed behaves like the Next build.
 createRoot(root).render(
   <StrictMode>
     <ThemeProvider
@@ -26,7 +32,9 @@ createRoot(root).render(
       enableSystem
       disableTransitionOnChange
     >
-      <AppShell />
+      <Providers>
+        <AppShell />
+      </Providers>
     </ThemeProvider>
   </StrictMode>
 );
