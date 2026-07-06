@@ -7,11 +7,9 @@ import { cn } from "@/lib/utils";
 import { groupMessageParts } from "@/lib/chat/message-parts";
 import { resolveReferenceLinks } from "@/lib/markdown/reference-links";
 import { splitDataImages } from "@/lib/markdown/data-images";
-import {
-  Message as MessageRow,
-  MessageContent,
-} from "@/components/ui/message";
+import { Message as MessageRow, MessageContent } from "@/components/ui/message";
 import { Skeleton } from "@/components/ui/skeleton";
+import { LoaderOne } from "@/components/ui/loader";
 import { ActivityGroup } from "../activity-group";
 import { StreamError } from "../stream-error";
 import { FeedbackPanel } from "../feedback-panel";
@@ -33,7 +31,10 @@ export interface AssistantMessageProps extends React.ComponentProps<"div"> {
 }
 
 /** Shiki themes for streamed code blocks (light, dark) — flip with the app theme. */
-const SHIKI_THEME: [BundledTheme, BundledTheme] = ["github-light", "github-dark"];
+const SHIKI_THEME: [BundledTheme, BundledTheme] = [
+  "github-light",
+  "github-dark",
+];
 
 /** External-link confirmation, portaled to the viewport (see link-safety-modal). */
 const LINK_SAFETY = {
@@ -88,7 +89,9 @@ export function AssistantMessage({
           if (segment.kind === "text") {
             // Base64 images an agent streams are rendered by us (see renderTextSegment) —
             // Streamdown blocks `data:` image URIs and offers no opt-in prop.
-            const blocks = splitDataImages(resolveReferenceLinks(segment.part.text));
+            const blocks = splitDataImages(
+              resolveReferenceLinks(segment.part.text),
+            );
             const lastMd = blocks.map((b) => b.type).lastIndexOf("md");
             return (
               <React.Fragment key={`t${segment.index}`}>
@@ -113,7 +116,9 @@ export function AssistantMessage({
                       data-slot="assistant-markdown"
                       shikiTheme={SHIKI_THEME}
                       linkSafety={LINK_SAFETY}
-                      isAnimating={streaming && i === lastSegment && bi === lastMd}
+                      isAnimating={
+                        streaming && i === lastSegment && bi === lastMd
+                      }
                       className="min-w-0 animate-in fade-in-0 slide-in-from-bottom-1 text-sm leading-relaxed duration-300 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_ul]:list-disc [&_ul]:list-outside [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:list-outside [&_ol]:pl-6"
                     >
                       {block.text}
@@ -154,17 +159,14 @@ export function AssistantMessage({
         {streaming && hasVisible ? (
           // Content is already flowing but the turn hasn't settled — a bouncing-dots
           // indicator at the bottom signals "still generating" (distinct from the
-          // pre-first-event skeleton above). The three dots pulse out of phase.
-          <div
+          // pre-first-event skeleton above). LoaderOne animates the three dots as a
+          // continuous motion-driven wave (no unison-then-pause stutter).
+          <LoaderOne
             data-slot="assistant-generating"
             role="status"
             aria-label="Assistant is generating"
-            className="flex items-center gap-1 py-1"
-          >
-            <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:-0.3s]" />
-            <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50 [animation-delay:-0.15s]" />
-            <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground/50" />
-          </div>
+            className="py-1"
+          />
         ) : null}
 
         {message.error ? <StreamError message={message.error} /> : null}
