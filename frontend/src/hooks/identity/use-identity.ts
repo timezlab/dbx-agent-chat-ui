@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { CapabilityConfig, Identity } from "@/entities";
-import { resolveIdentity, type IdentityClient } from "@/lib/identity/client";
+import { IdentityApiService } from "@/lib/api/identity";
 
 export interface UseIdentityOptions {
-  /** Public capability config; used to resolve the identity client from `meUrl`. */
+  /** Public capability config; used to build the identity service from `meUrl`. */
   config: CapabilityConfig;
-  /** Identity client; defaults to `resolveIdentity(config)`. Injectable for tests. */
-  client?: IdentityClient | null;
+  /** Identity service; defaults to `new IdentityApiService(config)`. Injectable for tests. */
+  service?: Pick<IdentityApiService, "me">;
 }
 
 export interface UseIdentityResult {
@@ -23,18 +23,15 @@ export interface UseIdentityResult {
 }
 
 /**
- * Fetch the current user's identity once on mount (same load-once effect pattern as
- * `useAgents`) and hold it for the sidebar chip. A null client (no `meUrl`) or a
- * throwing `me()` collapses to `available: false` — the chip hides. Display-only; the
- * identity is never sent to the chat backend.
+ * Fetch the current user's identity once on mount and hold it for the sidebar chip. An
+ * unconfigured service (no `meUrl`) resolves to null and a throwing `me()` is swallowed
+ * — either way `available: false` and the chip hides. Display-only; the identity is never
+ * sent to the chat backend.
  */
 export function useIdentity(options: UseIdentityOptions): UseIdentityResult {
-  const client = useMemo(
-    () =>
-      options.client !== undefined
-        ? options.client
-        : resolveIdentity(options.config),
-    [options.client, options.config],
+  const service = useMemo(
+    () => options.service ?? new IdentityApiService(options.config),
+    [options.service, options.config],
   );
 
   const [identity, setIdentity] = useState<Identity | null>(null);
@@ -43,9 +40,8 @@ export function useIdentity(options: UseIdentityOptions): UseIdentityResult {
   useEffect(() => {
     if (loadedRef.current) return;
     loadedRef.current = true;
-    if (!client) return;
     let cancelled = false;
-    void client
+    void service
       .me()
       .then((me) => {
         if (cancelled) return;
@@ -57,7 +53,7 @@ export function useIdentity(options: UseIdentityOptions): UseIdentityResult {
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [service]);
 
   return {
     identity,

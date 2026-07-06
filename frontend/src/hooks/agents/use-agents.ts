@@ -3,19 +3,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Agent, CapabilityConfig } from "@/entities";
-import { resolveAgents, type AgentsClient } from "@/lib/agents/client";
+import { AgentsApiService } from "@/lib/api/agents";
+import { useSessionStore } from "@/store/session-store";
 
 export interface UseAgentsOptions {
-  /** Public capability config; used to resolve the agents client from `agentsUrl`. */
+  /** Public capability config; used to build the agents service from `agentsUrl`. */
   config: CapabilityConfig;
-  /** Agents client; defaults to `resolveAgents(config)`. Injectable for tests. */
-  client?: AgentsClient | null;
+  /** Agents service; defaults to `new AgentsApiService(config)`. Injectable for tests. */
+  service?: Pick<AgentsApiService, "list">;
 }
 
 export interface UseAgentsResult {
   /** Fetched agents (empty until loaded, or if none / the fetch failed). */
   agents: Agent[];
-  /** Currently selected agent id, sent as `ChatRequest.agentId`. Null ⇒ none. */
+  /** Currently selected agent id (from the session store). Null ⇒ none. */
   selectedId: string | null;
   /** Choose an agent (must be one of `agents`). */
   setSelectedId: (id: string) => void;
@@ -28,37 +29,39 @@ export interface UseAgentsResult {
 }
 
 /**
- * Fetch the selectable agents once on mount (following the same load-once effect
- * pattern as history hydration in `useChat`) and hold the runtime selection. A null
- * client (no `agentsUrl`), a throwing `list()`, or an empty list all collapse to
- * `available: false` — the selector hides and chat uses the default endpoint with no
- * agent id (FR-024..FR-026, D11). The first agent is auto-selected so a configured
- * selector always sends a concrete `agentId`.
+ * Fetch the selectable agents once on mount and hold the runtime selection in the session
+ * store (persisted, so a reload keeps the chosen agent). An unconfigured service (no
+ * `agentsUrl`), a throwing `list()`, or an empty list all collapse to `available: false`
+ * — the selector hides and chat uses the default endpoint with no agent id (FR-024..
+ * FR-026, D11). A valid persisted selection is kept; otherwise the first agent is
+ * auto-selected so a configured selector always sends a concrete `agentId`.
  */
 export function useAgents(options: UseAgentsOptions): UseAgentsResult {
-  const client = useMemo(
-    () =>
-      options.client !== undefined
-        ? options.client
-        : resolveAgents(options.config),
-    [options.client, options.config],
+  const service = useMemo(
+    () => options.service ?? new AgentsApiService(options.config),
+    [options.service, options.config],
   );
 
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [selectedId, setSelected] = useState<string | null>(null);
+  const selectedId = useSessionStore((s) => s.selectedAgentId);
+  const selectAgent = useSessionStore((s) => s.selectAgent);
 
   const loadedRef = useRef(false);
   useEffect(() => {
     if (loadedRef.current) return;
     loadedRef.current = true;
-    if (!client) return;
     let cancelled = false;
-    void client
+    void service
       .list()
       .then((list) => {
         if (cancelled || list.length === 0) return;
         setAgents(list);
-        setSelected(list[0].id); // default to the first so a request always has an id
+        // Keep a valid persisted selection; otherwise default to the first so a
+        // configured selector always sends a concrete id.
+        const current = useSessionStore.getState().selectedAgentId;
+        if (!current || !list.some((a) => a.id === current)) {
+          selectAgent(list[0].id);
+        }
       })
       .catch(() => {
         // Swallow: a failed list ⇒ no selector, default endpoint (FR-026).
@@ -66,15 +69,18 @@ export function useAgents(options: UseAgentsOptions): UseAgentsResult {
     return () => {
       cancelled = true;
     };
-  }, [client]);
+  }, [service, selectAgent]);
 
-  const setSelectedId = useCallback((id: string) => {
-    // Ignore ids not in the list (stale option) — keep the current selection.
-    setAgents((current) => {
-      if (current.some((a) => a.id === id)) setSelected(id);
-      return current;
-    });
-  }, []);
+  const setSelectedId = useCallback(
+    (id: string) => {
+      // Ignore ids not in the list (stale option) — keep the current selection.
+      setAgents((current) => {
+        if (current.some((a) => a.id === id)) selectAgent(id);
+        return current;
+      });
+    },
+    [selectAgent],
+  );
 
   return {
     agents,

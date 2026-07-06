@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { Conversation, MessagePart } from "@/entities";
+import type { ChatSession, MessagePart } from "@/entities";
 import { reduceStreamEvent } from "@/lib/chat/reducer";
 
-function active(parts: MessagePart[] = []): Conversation {
+function active(parts: MessagePart[] = []): ChatSession {
   return {
     id: "c",
     messages: [

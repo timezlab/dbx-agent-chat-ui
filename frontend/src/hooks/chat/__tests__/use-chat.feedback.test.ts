@@ -1,8 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { CapabilityConfig } from "@/entities";
-import type { FeedbackSink } from "@/lib/feedback/sink";
+import type { CapabilityConfig, Feedback } from "@/entities";
 import type { ChatStreamHandlers, ChatTransport } from "@/lib/chat/transport";
 import { useChat } from "@/hooks/chat/use-chat";
 
@@ -23,9 +22,11 @@ function controllable() {
 
 function settledAssistant() {
   const { transport, state } = controllable();
-  const feedback: FeedbackSink = { submit: vi.fn(async () => {}) };
+  const submitFeedback: (feedback: Feedback) => Promise<void> = vi.fn(
+    async () => {},
+  );
   const { result } = renderHook(() =>
-    useChat({ config, transport, feedback }),
+    useChat({ config, transport, submitFeedback }),
   );
   act(() => result.current.send("hi"));
   act(() => state.handlers!.onEvent({ type: "token", delta: "hello" }));
@@ -33,12 +34,12 @@ function settledAssistant() {
   const assistantId = result.current.conversation.messages.find(
     (m) => m.role === "assistant",
   )!.id;
-  return { result, feedback, assistantId };
+  return { result, submitFeedback, assistantId };
 }
 
 describe("useChat — submitFeedback (US3)", () => {
   it("stores the full feedback object (rating + comment) on the message", () => {
-    const { result, feedback, assistantId } = settledAssistant();
+    const { result, submitFeedback, assistantId } = settledAssistant();
 
     act(() => {
       void result.current.submitFeedback({
@@ -53,7 +54,7 @@ describe("useChat — submitFeedback (US3)", () => {
     )!;
     expect(target.feedback).toMatchObject({ rating: "up", comment: "nice" });
     expect(typeof target.feedback?.submittedAt).toBe("number");
-    expect(feedback.submit).toHaveBeenCalledWith({
+    expect(submitFeedback).toHaveBeenCalledWith({
       messageId: assistantId,
       rating: "up",
       comment: "nice",

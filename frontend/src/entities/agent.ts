@@ -7,6 +7,16 @@ export const AgentSchema = z.object({
 });
 export type Agent = z.infer<typeof AgentSchema>;
 
+/**
+ * Response của agents API — backend trả về ĐÚNG shape này:
+ * `GET {agentsUrl}` → `{ agents: Agent[] }`. Không transform; schema khai báo là hợp
+ * đồng response. `agents` default `[]` để payload thiếu vẫn ra list rỗng (ẩn selector).
+ */
+export const AgentListResponseSchema = z.object({
+  agents: z.array(AgentSchema).default([]),
+});
+export type AgentListResponse = z.infer<typeof AgentListResponseSchema>;
+
 /** Trạng thái chọn agent. */
 export const AgentSelectionSchema = z.object({
   agents: z.array(AgentSchema), // rỗng ⇒ ẩn selector (FR-026)

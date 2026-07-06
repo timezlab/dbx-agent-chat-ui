@@ -18,11 +18,12 @@ import path from "node:path";
 
 // Frame parsing + per-frame delay come from the shared pure module, so the mock and the
 // client-side replay stream frames identically (FR-017 / FR-018 — single source of truth).
-import { delayFor, parseFrames } from "@/lib/stream/recording";
+import { delayFor, parseFrames } from "@/lib/chat/recording";
 
-// NB: no `export const dynamic = "force-dynamic"` — that directive is rejected while
-// `output: "export"` is set (even in `next dev`). A POST handler is dynamic by nature
-// in dev, so the stream still works; the `.dev.ts` gate keeps it out of the static build.
+// No `export const dynamic` needed: a POST streaming handler is dynamic by nature in dev,
+// and `next.config.ts` omits `output: "export"` under `next dev` (see the note there), so
+// there is no static-export constraint to satisfy here. The `.dev.ts` gate keeps this route
+// out of the production static build entirely.
 
 // Recording to replay, first match wins (paths relative to the app cwd):
 //   1. MOCK_RECORDING env override

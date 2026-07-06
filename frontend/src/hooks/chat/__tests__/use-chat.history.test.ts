@@ -1,10 +1,10 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CapabilityConfig, Conversation } from "@/entities";
-import type { HistoryProvider } from "@/lib/history/provider";
+import type { CapabilityConfig, ChatSession, Conversation } from "@/entities";
 import type { ChatStreamHandlers, ChatTransport } from "@/lib/chat/transport";
 import { useChat } from "@/hooks/chat/use-chat";
+import { resetSessionStore, useSessionStore } from "@/store/session-store";
 
 const config: CapabilityConfig = {
   chatEndpointUrl: "https://agent.example/invocations",
@@ -35,83 +35,87 @@ const restored: Conversation = {
       createdAt: 1,
     },
   ],
-  activeId: null,
-  queue: [],
-  status: "idle",
 };
 
-describe("useChat — history persistence (US4)", () => {
-  it("hydrates a pristine session from persisted history on startup", async () => {
-    const history: HistoryProvider = {
-      list: vi.fn(async () => [
-        { id: "restored", title: "earlier", updatedAt: 1, messageCount: 1 },
-      ]),
-      load: vi.fn(async () => restored),
-      save: vi.fn(async () => {}),
-    };
+beforeEach(() => {
+  resetSessionStore();
+});
+
+describe("useChat — history (US1, backend-only, no save)", () => {
+  it("hydrates a pristine session from the stored conversation id on startup", async () => {
+    // The store points at a previously-opened conversation (persisted pointer).
+    useSessionStore.getState().setConversationId("restored");
+    const loadHistory = vi.fn(async (id: string) =>
+      id === "restored" ? restored : null,
+    );
     const { transport } = controllable();
     const { result } = renderHook(() =>
-      useChat({ config, transport, history }),
+      useChat({ config, transport, loadHistory }),
     );
 
-    await waitFor(() =>
-      expect(result.current.messages).toHaveLength(1),
-    );
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+    expect(loadHistory).toHaveBeenCalledWith("restored");
     expect(result.current.messages[0].parts[0]).toEqual({
       type: "text",
       text: "earlier",
     });
   });
 
-  it("saves the conversation on a terminal turn transition", async () => {
-    const history: HistoryProvider = {
-      list: vi.fn(async () => []),
-      load: vi.fn(async () => null),
-      save: vi.fn(async () => {}),
-    };
+  it("shows an empty screen (no load) when nothing was opened before", async () => {
+    // Fresh store ⇒ conversationId is null ⇒ we must NOT auto-open the most recent.
+    const loadHistory = vi.fn(async () => restored);
+    const { transport } = controllable();
+    const { result } = renderHook(() =>
+      useChat({ config, transport, loadHistory }),
+    );
+
+    // Give any startup effect a tick — it must not fire a load.
+    await Promise.resolve();
+    expect(loadHistory).not.toHaveBeenCalled();
+    expect(result.current.messages).toHaveLength(0);
+  });
+
+  it("notifies onConversationSettled and publishes the id on a terminal turn", async () => {
+    const onConversationSettled = vi.fn();
     const { transport, state } = controllable();
     const { result } = renderHook(() =>
-      useChat({ config, transport, history }),
+      useChat({ config, transport, onConversationSettled }),
     );
 
     act(() => result.current.send("hi"));
     act(() => state.handlers!.onEvent({ type: "token", delta: "hello" }));
     act(() => state.handlers!.onEvent({ type: "done" }));
 
-    await waitFor(() => expect(history.save).toHaveBeenCalled());
-    const saved = (history.save as ReturnType<typeof vi.fn>).mock
-      .calls[0][0] as Conversation;
-    expect(saved.status).toBe("idle");
-    expect(saved.messages.some((m) => m.role === "assistant")).toBe(true);
+    await waitFor(() => expect(onConversationSettled).toHaveBeenCalled());
+    // The settled conversation is the runtime session (status is a ChatSession field).
+    const settled = onConversationSettled.mock.calls[0][0] as ChatSession;
+    expect(settled.status).toBe("idle");
+    expect(settled.messages.some((m) => m.role === "assistant")).toBe(true);
+    // The store pointer now tracks the settled conversation (persisted).
+    expect(useSessionStore.getState().conversationId).toBe(settled.id);
   });
 
-  it("newConversation clears state without persisting an empty session", async () => {
-    const history: HistoryProvider = {
-      list: vi.fn(async () => []),
-      load: vi.fn(async () => null),
-      save: vi.fn(async () => {}),
-    };
+  it("newConversation clears state and points the store at a fresh id", async () => {
+    const onConversationSettled = vi.fn();
     const { transport, state } = controllable();
     const { result } = renderHook(() =>
-      useChat({ config, transport, history }),
+      useChat({ config, transport, onConversationSettled }),
     );
 
     act(() => result.current.send("hi"));
     act(() => state.handlers!.onEvent({ type: "done" }));
-    expect(result.current.messages.length).toBeGreaterThan(0);
-    const savesBefore = (history.save as ReturnType<typeof vi.fn>).mock.calls
-      .length;
+    await waitFor(() => expect(onConversationSettled).toHaveBeenCalled());
+    const settledId = useSessionStore.getState().conversationId;
 
     act(() => result.current.newConversation());
     expect(result.current.messages).toHaveLength(0);
-    // The fresh empty conversation is NOT saved (no ghost row) and existing saved
-    // history is left untouched — no new save call beyond the terminal transition.
-    expect(
-      (history.save as ReturnType<typeof vi.fn>).mock.calls.length,
-    ).toBe(savesBefore);
+    // A fresh, empty session — the store points at a NEW id, not the settled one.
+    const freshId = useSessionStore.getState().conversationId;
+    expect(freshId).not.toBe(settledId);
+    expect(result.current.conversation.id).toBe(freshId);
   });
 
-  it("lists past conversations and opens one via selectConversation", async () => {
+  it("opens a past conversation via selectConversation and publishes the pointer", async () => {
     const other: Conversation = {
       ...restored,
       id: "other",
@@ -123,27 +127,17 @@ describe("useChat — history persistence (US4)", () => {
         },
       ],
     };
-    const history: HistoryProvider = {
-      list: vi.fn(async () => [
-        { id: "restored", title: "earlier", updatedAt: 2, messageCount: 1 },
-        { id: "other", title: "the other one", updatedAt: 1, messageCount: 1 },
-      ]),
-      load: vi.fn(async (id?: string) =>
-        id === "other" ? other : restored,
-      ),
-      save: vi.fn(async () => {}),
-    };
+    const loadHistory = vi.fn(async (id: string) =>
+      id === "other" ? other : restored,
+    );
     const { transport } = controllable();
     const { result } = renderHook(() =>
-      useChat({ config, transport, history }),
+      useChat({ config, transport, loadHistory }),
     );
-
-    await waitFor(() => expect(result.current.conversations).toHaveLength(2));
 
     act(() => result.current.selectConversation("other"));
-    await waitFor(() =>
-      expect(result.current.conversation.id).toBe("other"),
-    );
+    await waitFor(() => expect(result.current.conversation.id).toBe("other"));
+    expect(useSessionStore.getState().conversationId).toBe("other");
     expect(result.current.messages[0].parts[0]).toEqual({
       type: "text",
       text: "the other one",

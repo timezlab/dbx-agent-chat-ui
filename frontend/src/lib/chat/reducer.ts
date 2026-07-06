@@ -1,6 +1,6 @@
 import {
+  type ChatSession,
   type ChatStreamEvent,
-  type Conversation,
   type Message,
   type MessagePart,
   type ToolActivityItem,
@@ -8,17 +8,18 @@ import {
 } from "@/entities";
 
 /**
- * Pure reducer: apply one `ChatStreamEvent` to the conversation's ACTIVE assistant
+ * Pure reducer: apply one `ChatStreamEvent` to the session's ACTIVE assistant
  * message, assembling `Message.parts[]` from event ORDER (data-model.md › MessagePart).
- * No I/O, no mutation — returns a new `Conversation`.
+ * Operates on the runtime `ChatSession` (needs `activeId`/`status`), not the persisted
+ * `Conversation`. No I/O, no mutation — returns a new `ChatSession`.
  *
  * US1 handles `token` + `done`; US3 adds `tool` upsert + `error`. `reasoning` (T057)
  * extends the switch below.
  */
 export function reduceStreamEvent(
-  conversation: Conversation,
+  conversation: ChatSession,
   event: ChatStreamEvent,
-): Conversation {
+): ChatSession {
   const { activeId } = conversation;
   if (!activeId) return conversation; // nothing streaming → ignore
 
@@ -158,11 +159,11 @@ function dropEmptyParts(parts: MessagePart[]): MessagePart[] {
   );
 }
 
-/** Rebuild the conversation with the active message transformed. */
+/** Rebuild the session with the active message transformed. */
 function mapActive(
-  conversation: Conversation,
+  conversation: ChatSession,
   fn: (m: Message) => Message,
-): Conversation {
+): ChatSession {
   return {
     ...conversation,
     messages: conversation.messages.map((m) =>

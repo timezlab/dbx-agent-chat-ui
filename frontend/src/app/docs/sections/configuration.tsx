@@ -53,9 +53,11 @@ export function ConfigurationSection() {
           internal mock API route.
         </li>
         <li>
-          <strong className="text-foreground">Graceful Degradation:</strong> If
-          the History API fails or is unset, the UI falls back to{" "}
-          <InlineCode>localStorage</InlineCode>.
+          <strong className="text-foreground">Backend-only history:</strong> If the
+          History API fails or is unset, the sidebar is simply empty — there is no{" "}
+          <InlineCode>localStorage</InlineCode> fallback. The backend is the only store
+          of record; the browser keeps just a small session pointer (which conversation
+          was open).
         </li>
         <li>
           <strong className="text-foreground">Identity chip:</strong> Set{" "}

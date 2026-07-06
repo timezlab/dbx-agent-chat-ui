@@ -9,8 +9,8 @@ export const CapabilityConfigSchema = z.object({
   // NEXT_PUBLIC_CHAT_ENDPOINT_URL — endpoint chat DUY NHẤT (Databricks Playground format).
   // Local dev: trỏ vào mock-api script. Thiếu ⇒ UI hiện thông báo inline (T055).
   chatEndpointUrl: z.string().optional(),
-  historyUrl: z.string().optional(), // NEXT_PUBLIC_HISTORY_API_URL; unset ⇒ localStorage
-  feedbackUrl: z.string().optional(), // NEXT_PUBLIC_FEEDBACK_API_URL; unset ⇒ mock sink
+  historyUrl: z.string().optional(), // NEXT_PUBLIC_HISTORY_API_URL; unset ⇒ history trống (không localStorage)
+  feedbackUrl: z.string().optional(), // NEXT_PUBLIC_FEEDBACK_API_URL; unset ⇒ no-op
   agentsUrl: z.string().optional(), // NEXT_PUBLIC_AGENTS_API_URL; unset ⇒ ẩn selector
   // NEXT_PUBLIC_ME_API_URL — endpoint trả identity người dùng hiện tại (email + optional).
   // Optional; unset / fetch fail / thiếu email ⇒ ẩn chip identity. Chỉ để hiển thị.

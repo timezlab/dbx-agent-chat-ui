@@ -38,9 +38,9 @@ Keep a mock route, but make it **dev-only and invisible to the static build**:
    `output: "export"` is set.
 4. It streams a recording (real capture `public/recordings/rbg-performance-2026.txt` if
    present, else the committed `default.txt`; override via `MOCK_RECORDING`), pacing text
-   fast and tool events slower. `docker-compose.yml` defaults
-   `NEXT_PUBLIC_CHAT_ENDPOINT_URL=/api/chat` (trailing slash matches `trailingSlash:
-   true`, avoiding a 308 on POST).
+   fast and tool events slower. `frontend/.env` defaults
+   `NEXT_PUBLIC_CHAT_ENDPOINT_URL=/api/chat`; with `trailingSlash` removed the POST hits the
+   route directly (no 308 to a slash form).
 
 The standalone `scripts/mock-api.mjs` (a separate HTTP server) was removed. All mock scenarios now use the internal Next route, simplifying the dev environment to a single terminal.
 

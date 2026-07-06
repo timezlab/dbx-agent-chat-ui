@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import type { Conversation } from "@/entities";
+import type { ChatSession } from "@/entities";
 import { reduceStreamEvent } from "@/lib/chat/reducer";
 
 /** A conversation with one complete user turn + one streaming assistant turn. */
-function streamingConversation(): Conversation {
+function streamingConversation(): ChatSession {
   return {
     id: "c1",
     activeId: "a1",
@@ -35,8 +35,8 @@ function streamingConversation(): Conversation {
   };
 }
 
-const active = (c: Conversation) => c.messages.find((m) => m.id === c.activeId)!;
-const assistant = (c: Conversation) => c.messages.find((m) => m.id === "a1")!;
+const active = (c: ChatSession) => c.messages.find((m) => m.id === c.activeId)!;
+const assistant = (c: ChatSession) => c.messages.find((m) => m.id === "a1")!;
 
 describe("reduceStreamEvent — tokens", () => {
   it("opens a text part on the first token and grows it on subsequent tokens", () => {
@@ -92,7 +92,7 @@ describe("reduceStreamEvent — tokens", () => {
   });
 
   it("ignores events when there is no active message", () => {
-    const idle: Conversation = {
+    const idle: ChatSession = {
       ...streamingConversation(),
       activeId: null,
       status: "idle",

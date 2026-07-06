@@ -1,10 +1,10 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CapabilityConfig } from "@/entities";
-import type { HistoryProvider } from "@/lib/history/provider";
 import type { ChatStreamHandlers, ChatTransport } from "@/lib/chat/transport";
 import { useChat } from "@/hooks/chat/use-chat";
+import { resetSessionStore } from "@/store/session-store";
 
 const config: CapabilityConfig = {
   chatEndpointUrl: "https://agent.example/invocations",
@@ -21,13 +21,9 @@ function controllable() {
   return { transport, state };
 }
 
-function makeHistory(): HistoryProvider {
-  return {
-    list: vi.fn(async () => []),
-    load: vi.fn(async () => null),
-    save: vi.fn(async () => {}),
-  };
-}
+beforeEach(() => {
+  resetSessionStore();
+});
 
 const smallRecording =
   [
@@ -41,18 +37,22 @@ const smallRecording =
     })}`,
   ].join("\n\n") + "\n\n";
 
-const assistantText = (messages: { role: string; parts: { type: string }[] }[]) =>
+const assistantText = (
+  messages: { role: string; parts: { type: string; text?: string }[] }[],
+) =>
   messages
     .filter((m) => m.role === "assistant")
     .flatMap((m) => m.parts)
-    .map((p) => (p.type === "text" ? (p as { text: string }).text : ""))
+    .map((p) => (p.type === "text" ? (p.text ?? "") : ""))
     .join("");
 
 describe("useChat — replay mode (US1)", () => {
   it("plays a recording as a labelled user + assistant turn, driving the reducer, without persisting", async () => {
-    const history = makeHistory();
+    const onConversationSettled = vi.fn();
     const { transport } = controllable();
-    const { result } = renderHook(() => useChat({ config, transport, history }));
+    const { result } = renderHook(() =>
+      useChat({ config, transport, onConversationSettled }),
+    );
 
     act(() => result.current.toggleReplayMode());
     expect(result.current.replayMode).toBe(true);
@@ -82,15 +82,17 @@ describe("useChat — replay mode (US1)", () => {
     ).toContain("capture.txt");
     expect(assistantText(result.current.messages)).toContain("Hello replay");
 
-    // FR-020 / SC-006 — replay is NEVER persisted.
-    expect(history.save).not.toHaveBeenCalled();
+    // FR-020 / SC-006 — replay is NEVER recorded (no settle notification).
+    expect(onConversationSettled).not.toHaveBeenCalled();
     expect(result.current.replaySession.status).toBe("idle");
   });
 
   it("toggling replay mode off resets to a fresh, empty conversation", async () => {
-    const history = makeHistory();
+    const onConversationSettled = vi.fn();
     const { transport } = controllable();
-    const { result } = renderHook(() => useChat({ config, transport, history }));
+    const { result } = renderHook(() =>
+      useChat({ config, transport, onConversationSettled }),
+    );
 
     act(() => result.current.toggleReplayMode());
     act(() => result.current.replaySetTiming({ textDelayMs: 0, toolDelayMs: 0 }));
@@ -110,6 +112,6 @@ describe("useChat — replay mode (US1)", () => {
     expect(result.current.replayMode).toBe(false);
     expect(result.current.messages).toHaveLength(0);
     expect(result.current.replaySession.status).toBe("idle");
-    expect(history.save).not.toHaveBeenCalled();
+    expect(onConversationSettled).not.toHaveBeenCalled();
   });
 });

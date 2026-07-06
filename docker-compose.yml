@@ -25,6 +25,14 @@ services:
     # value here — which is how the sample prompts went missing.
     env_file:
       - frontend/.env
+    # This container runs `next dev` (see Dockerfile CMD), so it MUST be in development mode:
+    # only then does next.config.ts drop `output: "export"` and let the dev-only mock routes
+    # (`app/api/**/route.dev.ts`) run as real dynamic handlers (e.g. `?page` pagination on
+    # /api/history). A LITERAL value that overrides the `NODE_ENV=production` in the loaded
+    # `frontend/.env` — `environment:` wins over `env_file:`. This literal is safe (unlike the
+    # NEXT_PUBLIC_* warning above, it does NOT interpolate from the repo-root shell `.env`).
+    environment:
+      NODE_ENV: development
     # Resource ceiling for this container. `deploy.resources.limits` is honored by
     # `docker compose up` (Compose v2, non-swarm); `reservations` is a soft floor.
     # Sized for a single Next.js dev server on a shared host — override per-host via env

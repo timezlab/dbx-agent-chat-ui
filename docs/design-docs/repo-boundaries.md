@@ -27,7 +27,8 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
   reactCompiler: true,
-  trailingSlash: true,
+  // No `trailingSlash` — pages export as `docs.html` (served at `/docs`), and same-origin
+  // API calls avoid a 308 redirect to the slash form.
 };
 
 export default nextConfig;

@@ -2,9 +2,12 @@
 
 import * as React from "react";
 
-import type { Agent, CapabilityConfig } from "@/entities";
+import type { Agent, CapabilityConfig, Conversation } from "@/entities";
 import { useChat, type UseChatResult } from "@/hooks/chat/use-chat";
 import { useAgents } from "@/hooks/agents/use-agents";
+import { useHistoryMutations } from "@/hooks/chat/use-history";
+import { summarizeConversation } from "@/lib/api/history";
+import { useSessionStore } from "@/store/session-store";
 
 /**
  * The shared chat state plus the runtime agent selection (US5) and the presentational
@@ -48,10 +51,29 @@ export interface ChatProviderProps {
  * `agentId` rides along on every request.
  */
 export function ChatProvider({ config, children }: ChatProviderProps) {
+  // Seed the store config once when an explicit config prop is given (embedding / docs
+  // demo); the env path already holds the right default.
+  const setConfig = useSessionStore((s) => s.setConfig);
+  React.useEffect(() => {
+    if (config) setConfig(config);
+  }, [config, setConfig]);
+
   const { agents, selectedId, setSelectedId, available } = useAgents({
     config: config ?? {},
   });
-  const chat = useChat({ config, agentId: selectedId });
+
+  // On a settled turn, reconcile the sidebar list: optimistically prepend the summary,
+  // then invalidate so the backend's ordering wins.
+  const { prependConversation, invalidate } = useHistoryMutations();
+  const onConversationSettled = React.useCallback(
+    (conversation: Conversation) => {
+      prependConversation(summarizeConversation(conversation));
+      invalidate();
+    },
+    [prependConversation, invalidate],
+  );
+
+  const chat = useChat({ config, agentId: selectedId, onConversationSettled });
 
   const value: ChatContextValue = {
     ...chat,

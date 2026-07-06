@@ -14,7 +14,7 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_INPUT = resolve(scriptDir, "../sse-recordings/default.txt");
 const DEFAULT_OUTPUT = resolve(
   scriptDir,
-  "../src/lib/stream/recordings/default-recording.generated.ts",
+  "../src/lib/chat/recordings/default-recording.generated.ts",
 );
 
 /**

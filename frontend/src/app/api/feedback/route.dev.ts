@@ -1,6 +1,6 @@
 // Dev-only feedback mock for `NEXT_PUBLIC_FEEDBACK_API_URL=/api/feedback` (the
 // docker/dev default). Gated out of `next build` via the `.dev.ts` extension, so it
-// never ships in the static export. Mirrors the FeedbackSink remote contract:
+// never ships in the static export. Mirrors the FeedbackApiService POST contract:
 //   POST /api/feedback ← { messageId, rating: "up"|"down", comment? } → 200 { ok: true }
 // A POST handler is never prerendered, so (unlike a GET) it needs no `force-static`.
 // The mock accepts and discards — feedback also rides along on the message itself and

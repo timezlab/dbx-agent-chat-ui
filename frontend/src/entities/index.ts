@@ -1,7 +1,7 @@
 /**
  * Barrel cho toàn bộ entity (data model) của app.
- * Entity = schema zod + type suy ra; port hành vi (ChatTransport, HistoryProvider,
- * FeedbackSink, AgentsClient) KHÔNG ở đây — chúng sống ở lib/.
+ * Entity = schema zod + type suy ra; hành vi (ChatTransport ở lib/chat, các ApiService ở
+ * lib/api) KHÔNG ở đây — chúng sống ở lib/.
  */
 
 export * from "./deepagents-tools";

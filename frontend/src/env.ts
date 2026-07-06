@@ -18,8 +18,10 @@ export const env = createEnv({
     // the standalone mock-api script; the UI can't tell them apart). Unset ⇒ notice.
     NEXT_PUBLIC_CHAT_ENDPOINT_URL: endpointUrl.optional(),
 
-    // Host-provided REST endpoint for conversation history. Unset ⇒ localStorage
-    // (degrading to in-memory). This repo owns no history backend (Principle I).
+    // Host-provided REST endpoint for conversation history (paginated read-only). Unset ⇒
+    // history is simply empty — NO localStorage fallback (the backend is the only store of
+    // record). This repo owns no history backend (Principle I). See ADR
+    // `state-store-and-no-local-history.md`.
     NEXT_PUBLIC_HISTORY_API_URL: endpointUrl.optional(),
 
     // Host-provided REST endpoint for reply feedback (thumbs + comment). Unset ⇒

@@ -4,6 +4,7 @@ import * as React from "react";
 import { TriangleAlertIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { OverlayScroll } from "@/components/overlay-scroll";
 import { firstTodoWriteCallId, selectLatestTodos } from "@/lib/chat/todos";
 import { useChatContext } from "./chat-provider";
 import { MessageList } from "./messages/message-list";
@@ -74,9 +75,9 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
         // the space and scrolls when the viewport is short; `my-auto` on ChatEmpty
         // centers the content when it fits, and collapses so the top stays reachable
         // when it overflows.
-        <div
+        <OverlayScroll
           data-slot="chat-empty-scroll"
-          className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+          className="flex min-h-0 flex-1 flex-col"
         >
           <ChatEmpty
             samplePrompts={samplePrompts}
@@ -84,7 +85,7 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
             disabled={configError != null}
             className="my-auto"
           />
-        </div>
+        </OverlayScroll>
       ) : (
         <MessageList
           messages={messages}

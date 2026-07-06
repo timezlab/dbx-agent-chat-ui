@@ -10,9 +10,6 @@ const T0 = 1_735_732_800_000; // 2025-01-01T12:00:00Z
 export const MOCK_CONVERSATIONS: Conversation[] = [
   {
     id: "conv-delta-sql",
-    activeId: null,
-    queue: [],
-    status: "idle",
     messages: [
       {
         id: "c1-m1",
@@ -74,9 +71,6 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
   },
   {
     id: "conv-vector-search",
-    activeId: null,
-    queue: [],
-    status: "idle",
     messages: [
       {
         id: "c2-m1",
@@ -107,9 +101,6 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
   },
   {
     id: "conv-unity-catalog",
-    activeId: null,
-    queue: [],
-    status: "idle",
     messages: [
       {
         id: "c3-m1",
@@ -144,7 +135,77 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
   },
 ];
 
+/**
+ * Filler conversations so the seeded list exceeds one page (`per_page = 20`) and the
+ * sidebar's infinite scroll / "load more" is exercisable in dev. Deterministic (fixed
+ * epoch offsets, no clock); each is a short two-turn exchange. Older than the three rich
+ * ones above so those stay on top (newest-first).
+ */
+const FILLER_TOPICS = [
+  "List all catalogs in Unity Catalog",
+  "Difference between a managed and external table",
+  "Optimize a slow Delta merge",
+  "Set up a DLT streaming pipeline",
+  "Explain Z-ordering vs partitioning",
+  "Read a Parquet file from a volume",
+  "Configure a job cluster with spot instances",
+  "Write a UDF in PySpark",
+  "Enable change data feed on a table",
+  "Query a table's version history",
+  "Create a materialized view",
+  "Grant SELECT on a catalog to a group",
+  "Schedule a workflow with a cron trigger",
+  "Debug a broadcast join hint",
+  "Vacuum old files from a Delta table",
+  "Connect a SQL warehouse from Power BI",
+  "Set up MLflow experiment tracking",
+  "Use Auto Loader for incremental ingest",
+  "Convert a Parquet table to Delta",
+  "Explain photon acceleration",
+  "Cluster policy for cost control",
+  "Row-level security with row filters",
+];
+
+const FILLER_CONVERSATIONS: Conversation[] = FILLER_TOPICS.map(
+  (topic, index): Conversation => {
+    // Space them one hour apart, all BEFORE T0 so the rich three stay newest.
+    const created = T0 - (index + 1) * HOUR;
+    const id = `conv-seed-${String(index + 1).padStart(2, "0")}`;
+    return {
+      id,
+      messages: [
+        {
+          id: `${id}-m1`,
+          role: "user",
+          parts: [{ type: "text", text: topic }],
+          attachments: [],
+          status: "complete",
+          error: null,
+          feedback: null,
+          createdAt: created,
+        },
+        {
+          id: `${id}-m2`,
+          role: "assistant",
+          parts: [{ type: "text", text: `Here's how to approach "${topic}".` }],
+          attachments: [],
+          status: "complete",
+          error: null,
+          feedback: null,
+          createdAt: created + 4_000,
+        },
+      ],
+    };
+  },
+);
+
+/** Every seeded conversation — the three rich demos plus the fillers (25+ rows total). */
+export const ALL_MOCK_CONVERSATIONS: Conversation[] = [
+  ...MOCK_CONVERSATIONS,
+  ...FILLER_CONVERSATIONS,
+];
+
 /** Look up one seeded conversation by id (null when unknown). */
 export function findMockConversation(id: string): Conversation | null {
-  return MOCK_CONVERSATIONS.find((c) => c.id === id) ?? null;
+  return ALL_MOCK_CONVERSATIONS.find((c) => c.id === id) ?? null;
 }

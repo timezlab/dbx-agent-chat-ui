@@ -7,20 +7,29 @@ import type {
   Attachment,
   CapabilityConfig,
   ChatRequestMessage,
+  ChatSession,
   Conversation,
-  ConversationSummary,
   Message,
 } from "@/entities";
+import { toChatSession } from "@/entities";
 import { resolveConfig, isChatEndpointMissing } from "@/lib/config";
 import { dequeue, enqueue, isBlank } from "@/lib/chat/queue";
 import { reduceStreamEvent } from "@/lib/chat/reducer";
 import { createChatTransport, type ChatTransport } from "@/lib/chat/transport";
-import { streamReplay, type ReplayHandle } from "@/lib/stream/replay";
-import { TEXT_DELAY_MS, TOOL_DELAY_MS } from "@/lib/stream/recording";
-import { DEFAULT_REPLAY_RECORDING } from "@/lib/stream/recordings/default-recording.generated";
-import { resolveHistory, type HistoryProvider } from "@/lib/history/provider";
-import { resolveFeedback, type FeedbackSink } from "@/lib/feedback/sink";
+import { HistoryApiService } from "@/lib/api/history";
+import { FeedbackApiService } from "@/lib/api/feedback";
+import { useSessionStore } from "@/store/session-store";
+import {
+  useReplay,
+  type ReplaySession,
+  type ReplaySource,
+  type ReplaySpeed,
+} from "./use-replay";
 import type { Feedback } from "@/entities";
+
+// Replay types live in `use-replay`; re-exported here so existing consumers keep their
+// `@/hooks/chat/use-chat` import path.
+export type { ReplaySession, ReplaySource, ReplaySpeed };
 
 export interface UseChatOptions {
   /** Public capability config; defaults to `resolveConfig()` (env-derived). */
@@ -31,34 +40,27 @@ export interface UseChatOptions {
   now?: () => number;
   /** Injected id generator (stable, unique). */
   generateId?: () => string;
-  /** History provider; defaults to `resolveHistory(config)`. Injectable for tests. */
-  history?: HistoryProvider;
-  /** Feedback sink; defaults to `resolveFeedback(config)`. Injectable for tests. */
-  feedback?: FeedbackSink;
+  /**
+   * Load a full conversation by id; defaults to `new HistoryApiService(config).load`.
+   * Injectable for tests. Used on startup (re-open the stored conversation) and when
+   * selecting a past conversation.
+   */
+  loadHistory?: (id: string) => Promise<Conversation | null>;
+  /**
+   * Submit feedback; defaults to `new FeedbackApiService(config).submit`. Injectable for
+   * tests.
+   */
+  submitFeedback?: (feedback: Feedback) => Promise<void>;
+  /**
+   * Called on each terminal turn (streaming → idle with content, non-replay) so the shell
+   * can reconcile the sidebar list (optimistic prepend + invalidate). No-op by default.
+   */
+  onConversationSettled?: (conversation: Conversation) => void;
   /**
    * Selected agent id (US5). Rides along on every `ChatRequest.agentId`; null/undefined
    * ⇒ no agent id (default endpoint routing, FR-025/FR-026).
    */
   agentId?: string | null;
-}
-
-/** Playback speed multiplier presets (D-R3). */
-export type ReplaySpeed = 0.5 | 1 | 2 | 4;
-
-/** Which recording source drives replay. Upload carries the client-read text (D-R4). */
-export type ReplaySource =
-  | { kind: "default" }
-  | { kind: "upload"; fileName: string; text: string };
-
-/** Transport-style state of one replay playback (ephemeral; never persisted). */
-export interface ReplaySession {
-  status: "idle" | "playing" | "paused";
-  source: "default" | "upload";
-  fileName?: string;
-  textDelayMs: number;
-  toolDelayMs: number;
-  speed: ReplaySpeed;
-  error: string | null;
 }
 
 export interface UseChatResult {
@@ -67,8 +69,6 @@ export interface UseChatResult {
   status: "idle" | "streaming";
   /** Readable inline notice when the chat endpoint is missing/unavailable (T055). */
   configError: string | null;
-  /** Past conversations for the sidebar history list, newest-first (read-only). */
-  conversations: ConversationSummary[];
   send: (text: string, attachments?: Attachment[]) => void;
   /** Abort the active generation; partial output is kept and marked `stopped` (US2). */
   cancel: () => void;
@@ -98,21 +98,6 @@ export interface UseChatResult {
   replayResetTiming: () => void;
   /** Change the speed multiplier; applies to subsequent frames (FR-015/FR-016). */
   replaySetSpeed: (speed: ReplaySpeed) => void;
-}
-
-const REPLAY_MAX_DELAY_MS = 60_000;
-const clampReplayDelay = (n: number): number =>
-  Math.min(Math.max(Number.isFinite(n) ? n : 0, 0), REPLAY_MAX_DELAY_MS);
-
-function freshReplaySession(): ReplaySession {
-  return {
-    status: "idle",
-    source: "default",
-    textDelayMs: TEXT_DELAY_MS,
-    toolDelayMs: TOOL_DELAY_MS,
-    speed: 1,
-    error: null,
-  };
 }
 
 function defaultId(): string {
@@ -146,39 +131,41 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
     [options.transport, config.chatEndpointUrl],
   );
 
-  const history = useMemo(
-    () => options.history ?? resolveHistory(config),
-    [options.history, config],
+  const loadHistory = useMemo(
+    () =>
+      options.loadHistory ??
+      ((id: string) => new HistoryApiService(config).load(id)),
+    [options.loadHistory, config],
   );
 
-  const feedbackSink = useMemo(
-    () => options.feedback ?? resolveFeedback(config),
-    [options.feedback, config],
+  const submitFeedbackFn = useMemo(
+    () =>
+      options.submitFeedback ??
+      ((feedback: Feedback) => new FeedbackApiService(config).submit(feedback)),
+    [options.submitFeedback, config],
   );
 
-  const [conversation, setConversation] = useState<Conversation>(() => ({
+  const onConversationSettled = options.onConversationSettled;
+
+  // Publish the active conversation id to the session store (persisted pointer). The
+  // reducer stays the single writer of the `conversation` object; the store only mirrors
+  // the id so a reload can re-open it.
+  const setConversationId = useSessionStore((s) => s.setConversationId);
+  const newConversationId = useSessionStore((s) => s.newConversationId);
+  // Startup must wait for the persisted pointer to be read back (post-mount rehydrate),
+  // otherwise it reads the default `null` and shows an empty screen despite a stored id.
+  const hasHydrated = useSessionStore((s) => s._hasHydrated);
+
+  // Runtime session = a persisted `Conversation` (id + messages) plus the streaming
+  // state machine's transient fields (activeId/queue/status). `loadHistory` returns the
+  // base `Conversation`; it is hydrated into a session via `toChatSession` on open.
+  const [conversation, setConversation] = useState<ChatSession>(() => ({
     id: generateId(),
     messages: [],
     activeId: null,
     queue: [],
     status: "idle",
   }));
-
-  // Sidebar history list (summaries only). Refreshed on startup and after each save.
-  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
-
-  // --- Replay state (feature 002). Ephemeral; the recording text lives in a ref so a
-  // multi-MB upload never sits in React state / triggers renders. ---
-  const [replayMode, setReplayMode] = useState(false);
-  const replayModeRef = useRef(false);
-  useEffect(() => {
-    replayModeRef.current = replayMode;
-  });
-  const [replaySession, setReplaySession] = useState<ReplaySession>(
-    freshReplaySession,
-  );
-  const replayHandleRef = useRef<ReplayHandle | null>(null);
-  const replayRecordingRef = useRef<string>(DEFAULT_REPLAY_RECORDING);
 
   // Pre-flight guard: no chat endpoint means nothing can stream (T055).
   const [configError, setConfigError] = useState<string | null>(() =>
@@ -194,58 +181,34 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
     conversationRef.current = conversation;
   });
 
-  // Load persisted history once on startup and hydrate a still-pristine session
-  // (never clobber a chat the user already started while the async load was in
-  // flight). Async setState after an await is a legitimate external-sync effect.
+  // Startup: re-open the conversation the store points at (persisted pointer). Nothing
+  // opened yet (id null, e.g. a first-ever visit) ⇒ an empty screen — we do NOT
+  // auto-open "the most recent". Only hydrate a still-pristine session so we never
+  // clobber a chat the user already started while the async load was in flight.
   const loadedRef = useRef(false);
   useEffect(() => {
+    if (!hasHydrated) return; // wait for persisted pointer; effect re-runs when it flips
     if (loadedRef.current) return;
     loadedRef.current = true;
+    const storedId = useSessionStore.getState().conversationId;
+    if (!storedId) return; // nothing opened before ⇒ empty
     let cancelled = false;
-    void (async () => {
-      const list = await history.list().catch(() => []);
-      if (cancelled) return;
-      setConversations(list);
-      // Restore the most recent conversation into a still-pristine session (never
-      // clobber a chat the user already started while the async load was in flight).
-      const restored = list.length
-        ? await history.load(list[0].id).catch(() => null)
-        : await history.load().catch(() => null);
-      if (cancelled || !restored) return;
-      setConversation((prev) =>
-        prev.messages.length === 0 && prev.status === "idle" && !prev.activeId
-          ? restored
-          : prev,
-      );
-    })();
+    void loadHistory(storedId)
+      .then((restored) => {
+        if (cancelled || !restored) return;
+        setConversation((prev) =>
+          prev.messages.length === 0 && prev.status === "idle" && !prev.activeId
+            ? toChatSession(restored)
+            : prev,
+        );
+      })
+      .catch(() => {
+        // Swallow: a missing/failed load ⇒ stay on the empty session (no local fallback).
+      });
     return () => {
       cancelled = true;
     };
-  }, [history]);
-
-  // Persist on each terminal turn transition (streaming → idle with content), so a
-  // reload restores the last settled conversation (FR-018..FR-020, D9).
-  const prevStatusRef = useRef(conversation.status);
-  useEffect(() => {
-    const prev = prevStatusRef.current;
-    prevStatusRef.current = conversation.status;
-    if (
-      prev === "streaming" &&
-      conversation.status === "idle" &&
-      conversation.messages.length > 0 &&
-      // Replay turns are NEVER persisted (FR-020 / SC-006) — the whole point of replay
-      // is a client-only, non-resurrecting playback.
-      !replayModeRef.current
-    ) {
-      // Persist, then refresh the sidebar list so the just-settled turn shows up (new
-      // conversation) or moves to the top (updated one).
-      void history
-        .save(conversation)
-        .then(() => history.list())
-        .then(setConversations)
-        .catch(() => {});
-    }
-  }, [conversation, history]);
+  }, [loadHistory, hasHydrated]);
 
   // Selected agent id, read imperatively at send time so a mid-session change of agent
   // takes effect on the next request without re-creating the transport callbacks.
@@ -255,6 +218,13 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
   });
 
   const controllerRef = useRef<AbortController | null>(null);
+  // Aborting the active controller fires `onClose("abort")` SYNCHRONOUSLY (see streamSSE),
+  // which routes through `handleClose` and drains the queue. That is what we want for
+  // `cancel()` (the queued turn dispatches next), but NOT when we abort as part of LEAVING
+  // the conversation (`newConversation` / `selectConversation`): there the queued turn must
+  // be discarded, not sent to the backend. This flag, set only around a teardown abort,
+  // tells `handleClose` to skip the drain for that one abort.
+  const suppressQueueDrainRef = useRef(false);
   // Indirection to break the handleClose ↔ beginGeneration mutual reference:
   // handleClose (defined first) calls the latest beginGeneration through this ref,
   // which is kept current below once beginGeneration exists.
@@ -315,14 +285,14 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
         };
       });
 
-      // Drain the queue: start the next pending generation, if any.
+      // Leaving the conversation (newConversation/selectConversation) aborts mid-stream
+      // only to tear down — the caller replaces the whole conversation next, so the queued
+      // turn must be dropped, not dispatched. Skip the drain for that one abort.
+      if (suppressQueueDrainRef.current) return;
+
+      // Drain the queue: start the next pending generation, if any (empty ⇒ nothing to do).
       const { next: queuedMessage, queue } = dequeue(snapshot.queue);
-      if (queuedMessage == null) {
-        if (snapshot.queue.length > 0) {
-          setConversation((prev) => ({ ...prev, queue }));
-        }
-        return;
-      }
+      if (queuedMessage == null) return;
 
       // The dequeued turn now becomes a real message; `snapshot.messages` holds only
       // already-dispatched turns, so history is exactly those + this one — later still-
@@ -402,38 +372,87 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
     beginGenerationRef.current = beginGeneration;
   }, [beginGeneration]);
 
+  // Dev-tools Replay (feature 002) lives in its own hook; it drives the SAME conversation
+  // state through the SAME reducer + `handleClose` as live streaming.
+  const {
+    isReplayActive,
+    abortReplay,
+    ...replay
+  } = useReplay({
+    setConversation,
+    makeUser,
+    makeAssistant,
+    handleClose,
+    generateId,
+    abortActiveGeneration: () => controllerRef.current?.abort(),
+  });
+
+  // On each terminal turn transition (streaming → idle with content, non-replay), publish
+  // the id to the store (persisted pointer) and let the shell reconcile the sidebar list
+  // (optimistic prepend + invalidate). The backend records the turns as they stream —
+  // there is no client-side `save`.
+  const prevStatusRef = useRef(conversation.status);
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = conversation.status;
+    if (
+      prev === "streaming" &&
+      conversation.status === "idle" &&
+      conversation.messages.length > 0 &&
+      // Replay turns never touch history (FR-020 / SC-006) — client-only, non-resurrecting.
+      !isReplayActive()
+    ) {
+      setConversationId(conversation.id);
+      onConversationSettled?.(conversation);
+    }
+  }, [conversation, onConversationSettled, setConversationId, isReplayActive]);
+
   const cancel = useCallback(() => {
     // Aborting the active controller makes the transport fire onClose("abort"),
     // which routes through handleClose: partial parts stay, status → stopped, and
     // any queued message dispatches next. Idempotent — aborting an already-aborted
     // or absent controller is a no-op. Also aborts an active replay (US2, FR-013).
     controllerRef.current?.abort();
-    replayHandleRef.current?.abort();
-  }, []);
+    abortReplay();
+  }, [abortReplay]);
 
   const newConversation = useCallback(() => {
+    // Teardown abort: suppress the synchronous queue-drain so a turn queued behind the
+    // active generation is discarded with the conversation, not sent to the backend. The
+    // flag is consumed inside abort() (handleClose runs synchronously); clear it after in
+    // case there was no active generation to abort.
+    suppressQueueDrainRef.current = true;
     controllerRef.current?.abort();
-    // A fresh, empty session with a new id. We don't persist it (an empty conversation
-    // isn't saved) and we leave every other saved conversation untouched — the prior
-    // one was already persisted on its terminal transition.
+    suppressQueueDrainRef.current = false;
+    // A fresh, empty session with a new id, minted through the store so the persisted
+    // pointer follows the current session. Nothing is saved (empty), and every settled
+    // conversation stays recorded by the backend.
+    const id = newConversationId();
     setConversation({
-      id: generateId(),
+      id,
       messages: [],
       activeId: null,
       queue: [],
       status: "idle",
     });
-  }, [generateId]);
+  }, [newConversationId]);
 
   const selectConversation = useCallback(
     (id: string) => {
       if (id === conversationRef.current.id) return; // already open
+      // Teardown abort (see newConversation): a turn queued behind the active generation is
+      // discarded when leaving, not dispatched to the backend.
+      suppressQueueDrainRef.current = true;
       controllerRef.current?.abort();
-      void history.load(id).then((restored) => {
-        if (restored) setConversation(restored);
+      suppressQueueDrainRef.current = false;
+      // Publish the pointer eagerly so a reload re-opens this one even if the fetch is
+      // still in flight; the backend is the source of the turns.
+      setConversationId(id);
+      void loadHistory(id).then((restored) => {
+        if (restored) setConversation(toChatSession(restored));
       });
     },
-    [history],
+    [loadHistory, setConversationId],
   );
 
   const submitFeedback = useCallback(
@@ -457,9 +476,9 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
             : m,
         ),
       }));
-      return feedbackSink.submit(feedback);
+      return submitFeedbackFn(feedback);
     },
-    [feedbackSink],
+    [submitFeedbackFn],
   );
 
   const send = useCallback(
@@ -504,150 +523,6 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
     [makeUser, makeAssistant, beginGeneration, generateId],
   );
 
-  // --- Replay actions (feature 002). Replay drives the SAME conversation state through
-  // the SAME reducer + terminal handler (handleClose) as live streaming, so tool
-  // timelines / reasoning / markdown render identically (FR-012). ---
-
-  const toggleReplayMode = useCallback(() => {
-    // Abort whatever is streaming (live or replay) and reset to a fresh in-memory
-    // conversation. Save stays suppressed (replayModeRef), so nothing resurrects (D-R4).
-    controllerRef.current?.abort();
-    replayHandleRef.current?.abort();
-    replayHandleRef.current = null;
-
-    const next = !replayModeRef.current;
-    replayModeRef.current = next; // sync so the persistence effect reads the new value
-    setReplayMode(next);
-    setReplaySession(freshReplaySession());
-    replayRecordingRef.current = DEFAULT_REPLAY_RECORDING;
-    setConversation({
-      id: generateId(),
-      messages: [],
-      activeId: null,
-      queue: [],
-      status: "idle",
-    });
-  }, [generateId]);
-
-  const replaySetSource = useCallback((source: ReplaySource) => {
-    if (source.kind === "default") {
-      replayRecordingRef.current = DEFAULT_REPLAY_RECORDING;
-      setReplaySession((s) => ({
-        ...s,
-        source: "default",
-        fileName: undefined,
-        error: null,
-      }));
-      return;
-    }
-    replayRecordingRef.current = source.text;
-    setReplaySession((s) => ({
-      ...s,
-      source: "upload",
-      fileName: source.fileName,
-      // A file that read as empty blocks Play with a clear message (edge cases).
-      error: source.text.trim().length > 0 ? null : "The selected file is empty.",
-    }));
-  }, []);
-
-  const replaySetTiming = useCallback(
-    (timing: { textDelayMs?: number; toolDelayMs?: number }) => {
-      setReplaySession((s) => ({
-        ...s,
-        textDelayMs:
-          timing.textDelayMs != null
-            ? clampReplayDelay(timing.textDelayMs)
-            : s.textDelayMs,
-        toolDelayMs:
-          timing.toolDelayMs != null
-            ? clampReplayDelay(timing.toolDelayMs)
-            : s.toolDelayMs,
-      }));
-    },
-    [],
-  );
-
-  const replayResetTiming = useCallback(() => {
-    setReplaySession((s) => ({
-      ...s,
-      textDelayMs: TEXT_DELAY_MS,
-      toolDelayMs: TOOL_DELAY_MS,
-      speed: 1,
-    }));
-    replayHandleRef.current?.setSpeed(1);
-  }, []);
-
-  const replaySetSpeed = useCallback((speed: ReplaySpeed) => {
-    // Live speed change reaches the active playback; applies to subsequent frames only.
-    replayHandleRef.current?.setSpeed(speed);
-    setReplaySession((s) => ({ ...s, speed }));
-  }, []);
-
-  const replayPause = useCallback(() => {
-    replayHandleRef.current?.pause();
-    setReplaySession((s) =>
-      s.status === "playing" ? { ...s, status: "paused" } : s,
-    );
-  }, []);
-
-  const replayPlay = useCallback(() => {
-    // Resume a paused playback in place (no re-render of shown frames, FR-010).
-    if (replaySession.status === "paused" && replayHandleRef.current) {
-      replayHandleRef.current.resume();
-      setReplaySession((s) => ({ ...s, status: "playing" }));
-      return;
-    }
-    if (replaySession.status === "playing") return; // already running
-
-    const recording = replayRecordingRef.current;
-    if (!recording || recording.trim().length === 0) {
-      setReplaySession((s) => ({ ...s, error: "No recording selected." }));
-      return;
-    }
-
-    // Abort any prior handle, then create the labelled placeholder user turn + a
-    // streaming assistant turn (FR-011).
-    replayHandleRef.current?.abort();
-    const label =
-      replaySession.source === "upload"
-        ? `Replay: ${replaySession.fileName ?? "uploaded recording"}`
-        : "Replay: default recording";
-    const user = makeUser(label);
-    const assistant = makeAssistant();
-    const assistantId = assistant.id;
-    setConversation((prev) => ({
-      ...prev,
-      messages: [...prev.messages, user, assistant],
-      activeId: assistantId,
-      status: "streaming",
-    }));
-
-    const handle = streamReplay({
-      recording,
-      timing: {
-        textDelayMs: replaySession.textDelayMs,
-        toolDelayMs: replaySession.toolDelayMs,
-        speed: replaySession.speed,
-      },
-      handlers: {
-        onEvent: (event) => {
-          // Same detailed error toast + reducer path as live streaming.
-          if (event.type === "error") {
-            toast.error(event.message, { autoClose: false });
-          }
-          setConversation((prev) => reduceStreamEvent(prev, event));
-        },
-        onClose: (reason) => {
-          handleClose(assistantId, reason);
-          replayHandleRef.current = null;
-          setReplaySession((s) => ({ ...s, status: "idle" }));
-        },
-      },
-    });
-    replayHandleRef.current = handle;
-    setReplaySession((s) => ({ ...s, status: "playing", error: null }));
-  }, [replaySession, makeUser, makeAssistant, handleClose]);
-
   // Render view: real messages followed by the still-queued turns as pending ("queued")
   // bubbles. `queue` stays out of `conversation.messages` (which persists / feeds the
   // backend history), so this derivation is the only place the two rejoin — for display.
@@ -675,20 +550,12 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
     messages: renderMessages,
     status: conversation.status,
     configError,
-    conversations,
     send,
     cancel,
     newConversation,
     selectConversation,
     submitFeedback,
-    replayMode,
-    toggleReplayMode,
-    replaySession,
-    replayPlay,
-    replayPause,
-    replaySetSource,
-    replaySetTiming,
-    replayResetTiming,
-    replaySetSpeed,
+    // Replay public API (replayMode, replaySession, replayPlay/Pause/SetSource/…).
+    ...replay,
   };
 }

@@ -20,25 +20,22 @@ App code is under `frontend/src/`. Alias root `@/` → `frontend/src/`.
 
 | Module | Purpose | Depends on |
 |--------|---------|------------|
-| `src/app/` | Next App Router entry — `layout.tsx`, `page.tsx`, `globals.css`. | components, hooks, lib |
+| `src/app/` | Next App Router entry — `layout.tsx`, `page.tsx`, `providers.tsx` (TanStack Query), `globals.css`; dev-only `api/*/route.dev.ts` mocks. | components, hooks, lib, store |
+| `src/components/chat/`, `src/components/shell/` | Chat surface + app shell (sidebar with infinite-scroll history). | hooks, lib, store |
 | `src/components/ui/` | shadcn/Radix primitives (`new-york`, neutral, lucide). | `src/lib/utils` |
-| `src/hooks/` | Reusable React hooks (e.g. `use-mobile`). | lib |
-| `src/lib/` | Framework-agnostic helpers — `utils.ts` (`cn()`). | (leaf) |
+| `src/entities/` | Zod schemas + inferred types (the wire/data model, incl. `ConversationPageSchema`). | `zod` |
+| `src/hooks/chat/` | Chat state hooks — `use-chat`, `use-replay`, `use-history` (React Query). | lib, store, entities |
+| `src/hooks/agents/`, `src/hooks/identity/` | Agent-selector + identity-chip hooks. | lib/api, store |
+| `src/lib/chat/` | Chat domain — `ChatTransport` + SSE (`transport.ts`), stream reducer, replay, recording. | entities |
+| `src/lib/api/` | Capability REST layer — `ApiService` base (axios+zod) + `History`/`Agents`/`Feedback`/`Identity` subclasses. | entities |
+| `src/lib/` | Framework-agnostic helpers — `utils.ts` (`cn()`), `config.ts`. | (leaf) |
+| `src/store/` | Zustand session store — resolved `config` + persisted `conversationId`/`selectedAgentId` pointers. | lib, entities |
 | `src/env.ts` | Typed public env (`NEXT_PUBLIC_*` only; no secrets). | `zod`, `@t3-oss/env-nextjs` |
 | `embed/` | Standalone Vite build target for constrained proxy hosts. | shared UI modules |
 | `scripts/` | Build/deploy guards — `verify-databricks-output.mjs`, `verify-manual-output.mjs`, `pack-static-output.mjs`. | (node) |
 
-### Target modules (planned, not yet built)
-
-Per [`docs/design-docs/deployment-and-limits.md`](./docs/design-docs/deployment-and-limits.md)
-(D-011) and [`chat-transport.md`](./docs/design-docs/chat-transport.md), the chat
-feature will add:
-
-- `src/components/chat/`, `src/components/layout/` — chat surface + shell.
-- `src/hooks/chat/` — chat state / streaming hooks.
-- `src/lib/chat/` — `ChatTransport` interface + stream-event reducer.
-- `src/lib/databricks/` — transport adapters (responses, chat-completions, static-proxy, mock).
-- `src/lib/api/`, `src/lib/stream/` — fetch + SSE plumbing.
+History is backend-only (no `localStorage`): read-only, paginated (`page`/`per_page`),
+opened by id. See [`docs/design-docs/state-store-and-no-local-history.md`](./docs/design-docs/state-store-and-no-local-history.md).
 
 ## Dependency direction
 

@@ -1,16 +1,23 @@
 import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, expect, it } from "vitest";
 
 import type { CapabilityConfig } from "@/entities";
 import { ChatProvider } from "@/components/chat/chat-provider";
 import { ChatScreen } from "@/components/chat/chat-screen";
 
-/** ChatScreen reads shared state from context — render it under a provider. */
+/** ChatScreen reads shared state from context — render it under a provider. The
+ * ChatProvider now uses TanStack Query (history), so wrap in a QueryClientProvider. */
 function renderScreen(config: CapabilityConfig) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
-    <ChatProvider config={config}>
-      <ChatScreen />
-    </ChatProvider>,
+    <QueryClientProvider client={queryClient}>
+      <ChatProvider config={config}>
+        <ChatScreen />
+      </ChatProvider>
+    </QueryClientProvider>,
   );
 }
 

@@ -152,4 +152,45 @@ describe("useChat — cancel a generation (US2)", () => {
     ]);
     expect(result.current.status).toBe("streaming");
   });
+
+  it("New chat while a turn is queued discards it — no phantom send to the backend", () => {
+    const { transport, state } = controllable();
+    const { result } = renderHook(() => useChat({ config, transport }));
+
+    act(() => result.current.send("first"));
+    act(() => state.handlers!.onEvent({ type: "token", delta: "partial" }));
+    // Queue a turn behind the active generation, then leave via New chat.
+    act(() => result.current.send("second"));
+
+    const sendsBefore = state.sends;
+    act(() => result.current.newConversation());
+
+    // Leaving the conversation must NOT dispatch the queued turn (teardown, not cancel).
+    expect(state.sends).toBe(sendsBefore);
+    expect(result.current.messages).toHaveLength(0);
+    expect(result.current.status).toBe("idle");
+  });
+
+  it("Selecting another conversation while a turn is queued does not send it", () => {
+    const { transport, state } = controllable();
+    const restored = {
+      id: "conv-old",
+      messages: [],
+      activeId: null,
+      queue: [],
+      status: "idle" as const,
+    };
+    const { result } = renderHook(() =>
+      useChat({ config, transport, loadHistory: async () => restored }),
+    );
+
+    act(() => result.current.send("first"));
+    act(() => state.handlers!.onEvent({ type: "token", delta: "partial" }));
+    act(() => result.current.send("second"));
+
+    const sendsBefore = state.sends;
+    act(() => result.current.selectConversation("conv-old"));
+
+    expect(state.sends).toBe(sendsBefore);
+  });
 });
