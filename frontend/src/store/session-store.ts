@@ -62,6 +62,28 @@ const noopStorage = {
   removeItem: () => {},
 };
 
+/**
+ * Client `localStorage` for persist, but with writes SUPPRESSED until the initial
+ * `rehydrate()` has read the stored pointers back. Persist re-writes the whole partialized
+ * state on EVERY `setState`, and the store boots with null pointers (`skipHydration`). A
+ * write that lands BEFORE rehydrate — e.g. `ChatProvider` seeding `config` via `setConfig`,
+ * whose child effect commits before the parent `Providers`' rehydrate effect — would
+ * otherwise clobber the stored `conversationId` with the default `null`, so a reload would
+ * land on the empty screen instead of re-opening the conversation. Reads and removes always
+ * pass through; `enablePersistWrites()` opens the gate from `onRehydrateStorage`.
+ */
+let persistWritesEnabled = false;
+function enablePersistWrites(): void {
+  persistWritesEnabled = true;
+}
+const gatedLocalStorage = {
+  getItem: (name: string) => window.localStorage.getItem(name),
+  setItem: (name: string, value: string) => {
+    if (persistWritesEnabled) window.localStorage.setItem(name, value);
+  },
+  removeItem: (name: string) => window.localStorage.removeItem(name),
+};
+
 export const useSessionStore = create<SessionState>()(
   persist(
     (set) => ({
@@ -83,7 +105,7 @@ export const useSessionStore = create<SessionState>()(
     {
       name: "dbx-agent-session",
       storage: createJSONStorage(() =>
-        typeof window !== "undefined" ? window.localStorage : noopStorage,
+        typeof window !== "undefined" ? gatedLocalStorage : noopStorage,
       ),
       // Persist only the session pointers — never `config` (env-derived each load) and
       // never `_hasHydrated` (a runtime lifecycle flag, meaningless to store).
@@ -95,8 +117,11 @@ export const useSessionStore = create<SessionState>()(
       // `Providers`). Without this, persist would rehydrate synchronously at module load
       // and the first client render would diverge from the prerendered HTML.
       skipHydration: true,
-      // Fires when `rehydrate()` finishes — mark the store ready so gated consumers proceed.
+      // Fires when `rehydrate()` finishes — open the write gate now that the stored pointers
+      // have been read back (no earlier write can clobber them), then mark the store ready
+      // so gated consumers proceed.
       onRehydrateStorage: () => (state) => {
+        enablePersistWrites();
         state?.setHasHydrated(true);
       },
     },
@@ -111,6 +136,9 @@ export const useSessionStore = create<SessionState>()(
 export function resetSessionStore(
   config: CapabilityConfig = resolveConfig(),
 ): void {
+  // Tests never mount `Providers`, so `rehydrate()` (which opens the write gate) never runs;
+  // open it here so persistence assertions see writes reach `localStorage`.
+  enablePersistWrites();
   useSessionStore.persist?.clearStorage?.();
   useSessionStore.setState({
     config,

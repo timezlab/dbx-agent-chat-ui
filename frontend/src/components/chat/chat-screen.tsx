@@ -8,6 +8,7 @@ import { OverlayScroll } from "@/components/overlay-scroll";
 import { firstTodoWriteCallId, selectLatestTodos } from "@/lib/chat/todos";
 import { useChatContext } from "./chat-provider";
 import { MessageList } from "./messages/message-list";
+import { MessageListSkeleton } from "./messages/message-list-skeleton";
 import { ChatComposer } from "./chat-composer";
 import { ReplayControl } from "./replay-control";
 import { ChatEmpty } from "./chat-empty";
@@ -25,6 +26,7 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
   const {
     messages,
     status,
+    loadingConversation,
     configError,
     send,
     cancel,
@@ -70,7 +72,12 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
         </div>
       ) : null}
 
-      {empty ? (
+      {loadingConversation ? (
+        // A selected/restored conversation is being fetched — show the loading skeleton
+        // (we already switched to the target session) instead of the empty greeting or the
+        // previous conversation's turns.
+        <MessageListSkeleton className="min-h-0 flex-1" />
+      ) : empty ? (
         // The empty-state slot owns the scroll (mirrors the MessageList slot): it fills
         // the space and scrolls when the viewport is short; `my-auto` on ChatEmpty
         // centers the content when it fits, and collapses so the top stays reachable

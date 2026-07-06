@@ -136,11 +136,16 @@ describe("useChat — history (US1, backend-only, no save)", () => {
     );
 
     act(() => result.current.selectConversation("other"));
-    await waitFor(() => expect(result.current.conversation.id).toBe("other"));
+    // The switch is eager: the id + pointer flip immediately (skeleton shows) while the
+    // turns are still being fetched, then the loaded messages land.
+    expect(result.current.conversation.id).toBe("other");
     expect(useSessionStore.getState().conversationId).toBe("other");
-    expect(result.current.messages[0].parts[0]).toEqual({
-      type: "text",
-      text: "the other one",
-    });
+    await waitFor(() =>
+      expect(result.current.messages[0]?.parts[0]).toEqual({
+        type: "text",
+        text: "the other one",
+      }),
+    );
+    expect(result.current.loadingConversation).toBe(false);
   });
 });

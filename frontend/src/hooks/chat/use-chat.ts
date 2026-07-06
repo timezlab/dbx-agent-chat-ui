@@ -67,6 +67,13 @@ export interface UseChatResult {
   conversation: Conversation;
   messages: Message[];
   status: "idle" | "streaming";
+  /**
+   * True while a selected/restored conversation's turns are being fetched from the backend
+   * (from `selectConversation`, or the startup re-open). The surface switches to the target
+   * conversation immediately and shows a loading skeleton until the turns land — it does not
+   * keep the previous conversation on screen while the fetch is in flight.
+   */
+  loadingConversation: boolean;
   /** Readable inline notice when the chat endpoint is missing/unavailable (T055). */
   configError: string | null;
   send: (text: string, attachments?: Attachment[]) => void;
@@ -167,6 +174,13 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
     status: "idle",
   }));
 
+  // True while a conversation's turns are loading from the backend (select or startup
+  // re-open). Only one load is "current" at a time — `activeLoadRef` holds the id being
+  // loaded so a superseded fetch (rapid re-select) neither applies its turns nor clears the
+  // flag out from under the newer load.
+  const [loadingConversation, setLoadingConversation] = useState(false);
+  const activeLoadRef = useRef<string | null>(null);
+
   // Pre-flight guard: no chat endpoint means nothing can stream (T055).
   const [configError, setConfigError] = useState<string | null>(() =>
     isChatEndpointMissing(config)
@@ -193,9 +207,17 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
     const storedId = useSessionStore.getState().conversationId;
     if (!storedId) return; // nothing opened before ⇒ empty
     let cancelled = false;
+    // Show the loading skeleton until the restored turns land (instead of flashing the
+    // empty-state greeting while the fetch is in flight). `activeLoadRef` also lets a user
+    // action that supersedes this startup load (e.g. picking another conversation) bail out.
+    activeLoadRef.current = storedId;
+    // Starting the async restore — reflect its pending state so the surface shows the
+    // skeleton, not the empty greeting. (One-time load kick-off, not a render-loop.)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoadingConversation(true);
     void loadHistory(storedId)
       .then((restored) => {
-        if (cancelled || !restored) return;
+        if (cancelled || !restored || activeLoadRef.current !== storedId) return;
         setConversation((prev) =>
           prev.messages.length === 0 && prev.status === "idle" && !prev.activeId
             ? toChatSession(restored)
@@ -204,6 +226,10 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
       })
       .catch(() => {
         // Swallow: a missing/failed load ⇒ stay on the empty session (no local fallback).
+      })
+      .finally(() => {
+        if (!cancelled && activeLoadRef.current === storedId)
+          setLoadingConversation(false);
       });
     return () => {
       cancelled = true;
@@ -428,6 +454,9 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
     // pointer follows the current session. Nothing is saved (empty), and every settled
     // conversation stays recorded by the backend.
     const id = newConversationId();
+    // Cancel any in-flight restore so its late turns can't land on the new blank session.
+    activeLoadRef.current = null;
+    setLoadingConversation(false);
     setConversation({
       id,
       messages: [],
@@ -448,9 +477,21 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
       // Publish the pointer eagerly so a reload re-opens this one even if the fetch is
       // still in flight; the backend is the source of the turns.
       setConversationId(id);
-      void loadHistory(id).then((restored) => {
-        if (restored) setConversation(toChatSession(restored));
-      });
+      // Switch immediately: swap in a blank target session (id set now, so the sidebar
+      // highlight and any reload point here at once) and show the skeleton — don't keep the
+      // previous conversation's turns on screen while the fetch is in flight. `activeLoadRef`
+      // guards against a rapid re-select applying a stale/superseded fetch.
+      activeLoadRef.current = id;
+      setConversation({ id, messages: [], activeId: null, queue: [], status: "idle" });
+      setLoadingConversation(true);
+      void loadHistory(id)
+        .then((restored) => {
+          if (activeLoadRef.current !== id || !restored) return;
+          setConversation(toChatSession(restored));
+        })
+        .finally(() => {
+          if (activeLoadRef.current === id) setLoadingConversation(false);
+        });
     },
     [loadHistory, setConversationId],
   );
@@ -487,6 +528,11 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
       // don't stand alone (kept simple — T071 doesn't add an image-only send path).
       if (isBlank(text)) return;
       const snapshot = conversationRef.current;
+
+      // Sending in the current session supersedes any in-flight restore of it — cancel the
+      // load so its late turns can't overwrite this just-sent turn, and drop the skeleton.
+      activeLoadRef.current = null;
+      setLoadingConversation(false);
 
       if (snapshot.status === "streaming") {
         // Queue behind the active generation; auto-dispatched on terminal. The pending
@@ -549,6 +595,7 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
     conversation,
     messages: renderMessages,
     status: conversation.status,
+    loadingConversation,
     configError,
     send,
     cancel,
