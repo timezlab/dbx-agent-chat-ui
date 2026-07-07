@@ -2,10 +2,19 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ChatComposer } from "@/components/chat/chat-composer";
+import type { ContextUsage } from "@/lib/chat/metrics";
 
 function file(name: string, mimeType: string, content = "x"): File {
   return new File([content], name, { type: mimeType });
 }
+
+const contextUsage = (over: Partial<ContextUsage> = {}): ContextUsage => ({
+  used: 12400,
+  limit: 200000,
+  pct: 6,
+  level: "normal",
+  ...over,
+});
 
 describe("ChatComposer (US1 send + US2 stop)", () => {
   it("sends non-blank text on click and clears the input", () => {
@@ -123,6 +132,38 @@ describe("ChatComposer — attachments (T071)", () => {
     expect(attachments).toHaveLength(1);
     expect(attachments[0]).toMatchObject({ name: "cat.png", mimeType: "image/png" });
     expect(screen.queryByText("cat.png")).toBeNull();
+  });
+});
+
+describe("ChatComposer — context-window meter (004)", () => {
+  it("shows the meter when usage is enabled and a reading is present", () => {
+    render(
+      <ChatComposer onSend={vi.fn()} usageEnabled contextUsage={contextUsage()} />,
+    );
+    const meter = screen.getByRole("group", { name: /context/i });
+    expect(meter).toHaveTextContent("12k / 200k · 6%");
+  });
+
+  it("hides the meter when usage is disabled", () => {
+    render(
+      <ChatComposer
+        onSend={vi.fn()}
+        usageEnabled={false}
+        contextUsage={contextUsage()}
+      />,
+    );
+    expect(screen.queryByRole("group", { name: /context/i })).toBeNull();
+  });
+
+  it("hides the meter when the reading is unknown (no measurable usage)", () => {
+    render(
+      <ChatComposer
+        onSend={vi.fn()}
+        usageEnabled
+        contextUsage={contextUsage({ level: "unknown", used: 0, pct: 0 })}
+      />,
+    );
+    expect(screen.queryByRole("group", { name: /context/i })).toBeNull();
   });
 });
 

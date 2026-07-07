@@ -58,6 +58,51 @@ export function hasBackendMetrics(m: MessageMetrics | undefined): boolean {
   );
 }
 
+/** Occupancy warn/danger thresholds for the context-window meter (fractions of the limit). */
+export const CONTEXT_WARN_PCT = 0.7;
+export const CONTEXT_DANGER_PCT = 0.9;
+
+/** Meter reading for the current conversation's Checkpoint occupancy (004). `level` is
+ *  `"unknown"` when no assistant turn carries resolvable tokens yet (meter hidden). */
+export interface ContextUsage {
+  used: number;
+  limit: number;
+  /** Occupancy as an integer 0–100 (clamped). */
+  pct: number;
+  level: "normal" | "warn" | "danger" | "unknown";
+}
+
+/**
+ * Resolve the context-window meter reading from the conversation. Occupancy is the resolved
+ * total tokens of the LAST assistant turn that reports any (the backend Checkpoint size after
+ * that reply); the limit is that turn's backend-reported `contextWindow` when present, else
+ * the deploy-configured `configLimit` (backend wins — 004). `pct` is clamped to 0–100 so an
+ * overflow still reads as full, and `level` crosses to warn at ≥70% and danger at ≥90%.
+ * No measurable turn ⇒ `level:"unknown"` (the meter renders nothing).
+ */
+export function resolveContextUsage(
+  messages: Message[],
+  configLimit: number,
+): ContextUsage {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role !== "assistant" || !m.metrics) continue;
+    const used = resolveTotalTokens(m.metrics);
+    if (used == null) continue;
+    const limit = m.metrics.contextWindow ?? configLimit;
+    const ratio = limit > 0 ? used / limit : 0;
+    const pct = Math.round(Math.min(1, Math.max(0, ratio)) * 100);
+    const level =
+      ratio >= CONTEXT_DANGER_PCT
+        ? "danger"
+        : ratio >= CONTEXT_WARN_PCT
+          ? "warn"
+          : "normal";
+    return { used, limit, pct, level };
+  }
+  return { used: 0, limit: configLimit, pct: 0, level: "unknown" };
+}
+
 /** True when a turn has any visible streamed content (text/reasoning/tools) — the moment
  *  time-to-first-token is measured. */
 export function hasVisibleContent(message: Message): boolean {

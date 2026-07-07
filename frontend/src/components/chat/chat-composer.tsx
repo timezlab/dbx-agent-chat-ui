@@ -22,6 +22,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { isBlank } from "@/lib/chat/queue";
+import type { ContextUsage } from "@/lib/chat/metrics";
+import { ContextMeter } from "./context-meter";
 import { TodoCard } from "./todo-card";
 
 export interface ChatComposerProps
@@ -52,6 +54,10 @@ export interface ChatComposerProps
   uploadAccept?: string;
   /** Max size per attached file, in bytes (T071). */
   uploadMaxSizeBytes?: number;
+  /** Whether the usage surface is enabled — gates the context-window meter (004). */
+  usageEnabled?: boolean;
+  /** Current context-window occupancy for the toolbar meter (004). */
+  contextUsage?: ContextUsage;
 }
 
 function generateAttachmentId(): string {
@@ -97,6 +103,8 @@ export function ChatComposer({
   uploadEnabled = false,
   uploadAccept,
   uploadMaxSizeBytes,
+  usageEnabled = false,
+  contextUsage,
   className,
   ...props
 }: ChatComposerProps) {
@@ -287,6 +295,9 @@ export function ChatComposer({
             accept={uploadAccept}
             onPick={handleFilesPicked}
           />
+          {usageEnabled && contextUsage ? (
+            <ContextMeter usage={contextUsage} className="min-w-0 truncate" />
+          ) : null}
         </div>
 
         <div className="flex items-center gap-1.5">
