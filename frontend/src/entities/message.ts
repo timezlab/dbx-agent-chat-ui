@@ -31,6 +31,11 @@ export const MessageMetricsSchema = z.object({
   costUsd: z.number().optional(), // backend-computed; FE only displays (never estimates)
   durationMs: z.number().optional(), // end-to-end wall time, if the backend reports it
   ttftMs: z.number().optional(), // time to first token, if the backend reports it
+  // Backend Checkpoint size limit for THIS conversation (wire: snake_case
+  // `context_window`/`max_tokens`). The context-window meter measures occupancy against
+  // this; unset ⇒ the meter falls back to `config.contextWindow` (004). Optional so history
+  // rows and older backends simply omit it.
+  contextWindow: z.number().optional(),
 });
 export type MessageMetrics = z.infer<typeof MessageMetricsSchema>;
 

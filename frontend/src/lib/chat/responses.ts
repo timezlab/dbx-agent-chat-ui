@@ -181,12 +181,14 @@ function extractUsage(
   const costUsd = asNumber(usage.cost_usd ?? usage.cost);
   const durationMs = asNumber(usage.duration_ms);
   const ttftMs = asNumber(usage.ttft_ms);
+  const contextWindow = asNumber(usage.context_window ?? usage.max_tokens);
   if (inputTokens != null) out.inputTokens = inputTokens;
   if (outputTokens != null) out.outputTokens = outputTokens;
   if (totalTokens != null) out.totalTokens = totalTokens;
   if (costUsd != null) out.costUsd = costUsd;
   if (durationMs != null) out.durationMs = durationMs;
   if (ttftMs != null) out.ttftMs = ttftMs;
+  if (contextWindow != null) out.contextWindow = contextWindow;
   // Nothing numeric parsed ⇒ not a usage frame after all.
   return Object.keys(out).length > 1 ? out : null;
 }

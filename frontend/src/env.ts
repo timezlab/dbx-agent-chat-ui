@@ -67,6 +67,12 @@ export const env = createEnv({
     // deploy that shouldn't surface token/cost. Parsed in lib/config#parseShowUsage.
     NEXT_PUBLIC_SHOW_USAGE: z.string().optional(),
 
+    // Context-window size (tokens) the meter measures occupancy against, when the backend
+    // does not report a per-turn `context_window`. A plain number; unset / non-numeric /
+    // ≤0 ⇒ the built-in default (see parseContextWindow). Non-secret selector (Principle
+    // II). Backend-reported value always wins over this (004).
+    NEXT_PUBLIC_CONTEXT_WINDOW: z.string().optional(),
+
     // Host-provided REST endpoint for documentation link. Unset ⇒ hides docs icon.
     NEXT_PUBLIC_DOCS_URL: endpointUrl.optional(),
 
@@ -85,6 +91,7 @@ export const env = createEnv({
     NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB: process.env.NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB,
     NEXT_PUBLIC_DEV_TOOLS: process.env.NEXT_PUBLIC_DEV_TOOLS,
     NEXT_PUBLIC_SHOW_USAGE: process.env.NEXT_PUBLIC_SHOW_USAGE,
+    NEXT_PUBLIC_CONTEXT_WINDOW: process.env.NEXT_PUBLIC_CONTEXT_WINDOW,
     NEXT_PUBLIC_DOCS_URL: process.env.NEXT_PUBLIC_DOCS_URL,
     NEXT_PUBLIC_WELCOME_URL: process.env.NEXT_PUBLIC_WELCOME_URL,
   },

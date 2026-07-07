@@ -133,6 +133,24 @@ describe("createResponsesParser — Databricks Playground Responses → ChatStre
     ).toEqual([{ type: "usage", inputTokens: 5, outputTokens: 7 }]);
   });
 
+  it("maps usage.context_window (and max_tokens alias) → contextWindow", () => {
+    const p = createResponsesParser();
+    expect(
+      p.map({
+        type: "response.completed",
+        response: { usage: { total_tokens: 1203, context_window: 200000 } },
+      }),
+    ).toEqual([{ type: "usage", totalTokens: 1203, contextWindow: 200000 }]);
+    // `max_tokens` is accepted as an alias when `context_window` is absent.
+    expect(
+      p.map({ type: "response.completed", usage: { max_tokens: 128000 } }),
+    ).toEqual([{ type: "usage", contextWindow: 128000 }]);
+    // Absent ⇒ the field is simply omitted.
+    expect(
+      p.map({ type: "response.completed", usage: { total_tokens: 42 } }),
+    ).toEqual([{ type: "usage", totalTokens: 42 }]);
+  });
+
   it("carries a backend per-tool duration_ms onto the done tool event", () => {
     const p = createResponsesParser();
     p.map({

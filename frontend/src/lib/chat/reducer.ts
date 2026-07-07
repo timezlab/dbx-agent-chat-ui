@@ -221,5 +221,6 @@ function mergeMetrics(
   if (event.costUsd != null) next.costUsd = event.costUsd;
   if (event.durationMs != null) next.durationMs = event.durationMs;
   if (event.ttftMs != null) next.ttftMs = event.ttftMs;
+  if (event.contextWindow != null) next.contextWindow = event.contextWindow;
   return next;
 }

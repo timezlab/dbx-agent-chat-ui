@@ -35,6 +35,10 @@ export const CapabilityConfigSchema = z.object({
   // reply + run-time mỗi tool. Mặc định BẬT (khác các flag opt-in khác); chỉ tắt khi env
   // set "0"/"false"/"no"/"off". Parse tại lib/config.ts#parseShowUsage.
   usageEnabled: z.boolean().optional(),
+  // NEXT_PUBLIC_CONTEXT_WINDOW — giới hạn context (tokens) meter đo occupancy khi backend
+  // không gửi `context_window` mỗi lượt. Optional; default áp tại lib/config.ts#parseContextWindow.
+  // Backend-reported (metrics.contextWindow) luôn thắng giá trị này (004).
+  contextWindow: z.number().optional(),
   // NEXT_PUBLIC_DOCS_URL — URL cho tài liệu. Optional; unset ⇒ ẩn icon Docs ở sidebar.
   docsUrl: z.string().optional(),
   // NEXT_PUBLIC_WELCOME_URL — URL cho trang giới thiệu. Optional; unset ⇒ ẩn icon Welcome ở sidebar.

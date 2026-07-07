@@ -19,6 +19,7 @@ export function resolveConfig(): CapabilityConfig {
     uploadMaxSizeBytes: parseUploadMaxSizeMb(env.NEXT_PUBLIC_UPLOAD_MAX_SIZE_MB),
     devToolsEnabled: parseDevToolsEnabled(env.NEXT_PUBLIC_DEV_TOOLS),
     usageEnabled: parseShowUsage(env.NEXT_PUBLIC_SHOW_USAGE),
+    contextWindow: parseContextWindow(env.NEXT_PUBLIC_CONTEXT_WINDOW),
     docsUrl: resolveDeploymentUrl(env.NEXT_PUBLIC_DOCS_URL),
     welcomeUrl: resolveDeploymentUrl(env.NEXT_PUBLIC_WELCOME_URL),
   });
@@ -106,6 +107,27 @@ export function parseShowUsage(raw: string | undefined): boolean {
   const trimmed = raw?.trim().toLowerCase();
   if (!trimmed) return true;
   return !["0", "false", "no", "off"].includes(trimmed);
+}
+
+/**
+ * Default context-window size (tokens) when `NEXT_PUBLIC_CONTEXT_WINDOW` is unset and the
+ * backend reports no per-turn `context_window`. 200k mirrors the current Claude family
+ * default and is a safe visible baseline for the meter (004).
+ */
+export const DEFAULT_CONTEXT_WINDOW = 200000;
+
+/**
+ * Parse `NEXT_PUBLIC_CONTEXT_WINDOW` (a plain token count) into a positive integer. Unset,
+ * non-numeric, zero, or negative all degrade to `DEFAULT_CONTEXT_WINDOW` rather than
+ * throwing or allowing a zero/negative limit that would break the meter's percentage.
+ * Backend-reported `metrics.contextWindow` always takes precedence over this fallback.
+ */
+export function parseContextWindow(raw: string | undefined): number {
+  const trimmed = raw?.trim();
+  if (!trimmed) return DEFAULT_CONTEXT_WINDOW;
+  const n = Number(trimmed);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_CONTEXT_WINDOW;
+  return Math.round(n);
 }
 
 /** Default accept list when `NEXT_PUBLIC_UPLOAD_ACCEPT` is unset — images only. */

@@ -185,6 +185,20 @@ describe("reduceStreamEvent — usage metrics", () => {
     expect(assistant(c).metrics).toEqual({ totalTokens: 10, costUsd: 0.01 });
   });
 
+  it("folds a backend context_window onto the assistant metrics", () => {
+    let c = streamingConversation();
+    c = reduceStreamEvent(c, { type: "token", delta: "hi" });
+    c = reduceStreamEvent(c, {
+      type: "usage",
+      totalTokens: 150,
+      contextWindow: 200000,
+    });
+    expect(assistant(c).metrics).toEqual({
+      totalTokens: 150,
+      contextWindow: 200000,
+    });
+  });
+
   it("ignores usage when there is no assistant turn to attach it to", () => {
     const c: ChatSession = {
       id: "c0",
