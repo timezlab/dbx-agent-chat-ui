@@ -7,6 +7,7 @@ import { useChat, type UseChatResult } from "@/hooks/chat/use-chat";
 import { useAgents } from "@/hooks/agents/use-agents";
 import { useHistoryMutations } from "@/hooks/chat/use-history";
 import { summarizeConversation } from "@/lib/api/history";
+import { DEFAULT_CONTEXT_WINDOW } from "@/lib/config";
 import { useSessionStore } from "@/store/session-store";
 
 /**
@@ -35,6 +36,9 @@ export interface ChatContextValue extends UseChatResult {
   devToolsEnabled: boolean;
   /** Whether the per-reply usage/metrics footer + per-tool run-time are shown (default on). */
   usageEnabled: boolean;
+  /** Context-window size (tokens) the meter measures occupancy against when the backend
+   *  reports no per-turn `context_window` (004). */
+  contextWindow: number;
 }
 
 const ChatContext = React.createContext<ChatContextValue | null>(null);
@@ -89,6 +93,7 @@ export function ChatProvider({ config, children }: ChatProviderProps) {
     uploadMaxSizeBytes: config?.uploadMaxSizeBytes,
     devToolsEnabled: config?.devToolsEnabled ?? false,
     usageEnabled: config?.usageEnabled ?? true,
+    contextWindow: config?.contextWindow ?? DEFAULT_CONTEXT_WINDOW,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

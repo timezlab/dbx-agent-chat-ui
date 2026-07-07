@@ -58,6 +58,62 @@ export function hasBackendMetrics(m: MessageMetrics | undefined): boolean {
   );
 }
 
+/** Occupancy warn/danger thresholds for the context-window meter (fractions of the limit). */
+export const CONTEXT_WARN_PCT = 0.7;
+export const CONTEXT_DANGER_PCT = 0.9;
+
+/** Minimum occupancy (tokens) before the meter ring becomes a click-to-`/compact` control —
+ *  below this there is too little context to be worth compacting (004, per user). */
+export const COMPACT_MIN_TOKENS = 50_000;
+
+/** Meter reading for the current conversation's Checkpoint occupancy (004). The percentage
+ *  is derived (`used / limit`) by the consumer — only the raw numbers + the classified
+ *  `level` are stored. `used` comes from the backend `contextUsed` (occupancy), never from
+ *  `totalTokens` (cumulative billing). `level` is `"unknown"` when no assistant turn carries
+ *  `contextUsed` yet (meter hidden — no proxy). See ADR context-meter-occupancy-source.md. */
+export interface ContextUsage {
+  used: number;
+  limit: number;
+  level: "normal" | "warn" | "danger" | "unknown";
+}
+
+/** Occupancy as an integer 0–100, clamped so an overflow still reads as full. */
+export function contextPct(usage: Pick<ContextUsage, "used" | "limit">): number {
+  if (usage.limit <= 0) return 0;
+  return Math.round(Math.min(1, Math.max(0, usage.used / usage.limit)) * 100);
+}
+
+/**
+ * Resolve the context-window meter reading from the conversation. Occupancy is the backend
+ * `contextUsed` (Checkpoint size after the reply) of the LAST assistant turn that reports it —
+ * NOT `totalTokens`, which for a looping agent is cumulative billing across internal steps
+ * (ADR context-meter-occupancy-source.md). The limit is that turn's backend `contextWindow`
+ * when present, else the deploy-configured `configLimit` (backend wins — 004). `level` crosses
+ * to warn at ≥70% and danger at ≥90%. No turn carries `contextUsed` ⇒ `level:"unknown"` (the
+ * meter renders nothing; there is no proxy fallback to usage totals).
+ */
+export function resolveContextUsage(
+  messages: Message[],
+  configLimit: number,
+): ContextUsage {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role !== "assistant" || !m.metrics) continue;
+    const used = m.metrics.contextUsed;
+    if (used == null) continue;
+    const limit = m.metrics.contextWindow ?? configLimit;
+    const ratio = limit > 0 ? used / limit : 0;
+    const level =
+      ratio >= CONTEXT_DANGER_PCT
+        ? "danger"
+        : ratio >= CONTEXT_WARN_PCT
+          ? "warn"
+          : "normal";
+    return { used, limit, level };
+  }
+  return { used: 0, limit: configLimit, level: "unknown" };
+}
+
 /** True when a turn has any visible streamed content (text/reasoning/tools) — the moment
  *  time-to-first-token is measured. */
 export function hasVisibleContent(message: Message): boolean {

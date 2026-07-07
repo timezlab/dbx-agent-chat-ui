@@ -31,6 +31,16 @@ export const MessageMetricsSchema = z.object({
   costUsd: z.number().optional(), // backend-computed; FE only displays (never estimates)
   durationMs: z.number().optional(), // end-to-end wall time, if the backend reports it
   ttftMs: z.number().optional(), // time to first token, if the backend reports it
+  // Backend Checkpoint OCCUPANCY after this turn (wire: snake_case
+  // `context_used`/`checkpoint_tokens`) — the context-window meter's numerator. This is a
+  // point-in-time size, deliberately NOT `totalTokens` (which is cumulative billing across a
+  // looping agent's internal steps — ADR context-meter-occupancy-source.md). Unset ⇒ the meter
+  // is `unknown` and renders nothing (no proxy). Optional so history/older backends omit it.
+  contextUsed: z.number().optional(),
+  // Backend Checkpoint size LIMIT for THIS conversation (wire: snake_case
+  // `context_window`/`max_tokens`). The meter denominator; unset ⇒ falls back to
+  // `config.contextWindow` (004). Optional so history rows and older backends simply omit it.
+  contextWindow: z.number().optional(),
 });
 export type MessageMetrics = z.infer<typeof MessageMetricsSchema>;
 

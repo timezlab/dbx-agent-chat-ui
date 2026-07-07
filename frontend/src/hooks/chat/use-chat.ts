@@ -6,7 +6,6 @@ import { toast } from "react-toastify";
 import type {
   Attachment,
   CapabilityConfig,
-  ChatRequestMessage,
   ChatSession,
   Conversation,
   Message,
@@ -112,13 +111,6 @@ function defaultId(): string {
     globalThis.crypto?.randomUUID?.() ??
     `id-${Math.random().toString(36).slice(2)}`
   );
-}
-
-/** Flatten a message's text parts for the history sent back to the backend. */
-function flattenText(message: Message): string {
-  return message.parts
-    .map((p) => (p.type === "text" ? p.text : ""))
-    .join("");
 }
 
 function readableError(err: unknown): string {
@@ -255,7 +247,7 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
   // handleClose (defined first) calls the latest beginGeneration through this ref,
   // which is kept current below once beginGeneration exists.
   const beginGenerationRef = useRef<
-    (assistantId: string, history: ChatRequestMessage[]) => void
+    (assistantId: string, query: string, attachments: Attachment[]) => void
   >(() => {});
 
   const makeUser = useCallback(
@@ -326,19 +318,6 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
       // (T071, bounded payload growth per send).
       const user = makeUser(queuedMessage.text, queuedMessage.attachments);
       const assistant = makeAssistant();
-      const history: ChatRequestMessage[] = [
-        ...snapshot.messages.map((m) => ({
-          role: m.role,
-          content: flattenText(m),
-        })),
-        {
-          role: "user" as const,
-          content: queuedMessage.text,
-          ...(queuedMessage.attachments.length > 0
-            ? { attachments: queuedMessage.attachments }
-            : {}),
-        },
-      ];
       setConversation((prev) => ({
         ...prev,
         queue,
@@ -346,17 +325,25 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
         activeId: assistant.id,
         status: "streaming",
       }));
-      beginGenerationRef.current(assistant.id, history);
+      // Thin request (004, FR-019..021): dispatch only THIS turn — the backend owns the
+      // accumulated Checkpoint by `conversationId`, so re-sending history would re-inflate
+      // context and defeat /compact. Local `messages` (display/reload) is untouched.
+      beginGenerationRef.current(
+        assistant.id,
+        queuedMessage.text,
+        queuedMessage.attachments,
+      );
     },
     [makeUser, makeAssistant],
   );
 
   const beginGeneration = useCallback(
-    (assistantId: string, history: ChatRequestMessage[]) => {
+    (assistantId: string, query: string, attachments: Attachment[]) => {
       try {
         controllerRef.current = transport.send(
           {
-            messages: history,
+            query,
+            ...(attachments.length > 0 ? { attachments } : {}),
             conversationId: conversationRef.current.id,
             agentId: agentIdRef.current ?? undefined,
           },
@@ -547,24 +534,15 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
 
       const user = makeUser(text, attachments);
       const assistant = makeAssistant();
-      const history: ChatRequestMessage[] = [
-        ...snapshot.messages.map((m) => ({
-          role: m.role,
-          content: flattenText(m),
-        })),
-        {
-          role: "user" as const,
-          content: text,
-          ...(attachments.length > 0 ? { attachments } : {}),
-        },
-      ];
       setConversation((prev) => ({
         ...prev,
         messages: [...prev.messages, user, assistant],
         activeId: assistant.id,
         status: "streaming",
       }));
-      beginGeneration(assistant.id, history);
+      // Thin request (004, FR-019..021): only THIS turn — the backend owns the accumulated
+      // Checkpoint by `conversationId`. See ADR request-context-ownership.md.
+      beginGeneration(assistant.id, text, attachments);
     },
     [makeUser, makeAssistant, beginGeneration, generateId],
   );

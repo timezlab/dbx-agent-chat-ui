@@ -2,10 +2,18 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ChatComposer } from "@/components/chat/chat-composer";
+import type { ContextUsage } from "@/lib/chat/metrics";
 
 function file(name: string, mimeType: string, content = "x"): File {
   return new File([content], name, { type: mimeType });
 }
+
+const contextUsage = (over: Partial<ContextUsage> = {}): ContextUsage => ({
+  used: 120000,
+  limit: 200000,
+  level: "normal",
+  ...over,
+});
 
 describe("ChatComposer (US1 send + US2 stop)", () => {
   it("sends non-blank text on click and clears the input", () => {
@@ -123,6 +131,175 @@ describe("ChatComposer — attachments (T071)", () => {
     expect(attachments).toHaveLength(1);
     expect(attachments[0]).toMatchObject({ name: "cat.png", mimeType: "image/png" });
     expect(screen.queryByText("cat.png")).toBeNull();
+  });
+});
+
+describe("ChatComposer — context-window ring (004)", () => {
+  it("shows the ring meter when usage is enabled and a reading is present", () => {
+    render(
+      <ChatComposer onSend={vi.fn()} usageEnabled contextUsage={contextUsage()} />,
+    );
+    expect(
+      document.querySelector('[data-slot="context-meter"]'),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the meter when usage is disabled", () => {
+    render(
+      <ChatComposer
+        onSend={vi.fn()}
+        usageEnabled={false}
+        contextUsage={contextUsage()}
+      />,
+    );
+    expect(document.querySelector('[data-slot="context-meter"]')).toBeNull();
+  });
+
+  it("hides the meter when the reading is unknown (no measurable usage)", () => {
+    render(
+      <ChatComposer
+        onSend={vi.fn()}
+        usageEnabled
+        contextUsage={contextUsage({ level: "unknown", used: 0 })}
+      />,
+    );
+    expect(document.querySelector('[data-slot="context-meter"]')).toBeNull();
+  });
+});
+
+describe("ChatComposer — /compact via the ring (US2)", () => {
+  it("clicking the ring above threshold sends the verbatim /compact turn", () => {
+    const onSend = vi.fn();
+    render(
+      <ChatComposer onSend={onSend} usageEnabled contextUsage={contextUsage()} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /compact/i }));
+    expect(onSend).toHaveBeenCalledWith("/compact", []);
+  });
+
+  it("is not clickable below the compact threshold", () => {
+    render(
+      <ChatComposer
+        onSend={vi.fn()}
+        usageEnabled
+        contextUsage={contextUsage({ used: 12400 })}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /compact/i })).toBeNull();
+  });
+
+  it("disables the compact click while a generation is busy", () => {
+    render(
+      <ChatComposer onSend={vi.fn()} usageEnabled contextUsage={contextUsage()} busy />,
+    );
+    expect(screen.getByRole("button", { name: /compact/i })).toBeDisabled();
+  });
+
+  it("prefers an explicit onCompact handler when provided", () => {
+    const onCompact = vi.fn();
+    const onSend = vi.fn();
+    render(
+      <ChatComposer
+        onSend={onSend}
+        onCompact={onCompact}
+        usageEnabled
+        contextUsage={contextUsage()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /compact/i }));
+    expect(onCompact).toHaveBeenCalledOnce();
+    expect(onSend).not.toHaveBeenCalled();
+  });
+});
+
+describe("ChatComposer — slash suggester (US3)", () => {
+  const typed = (value: string) => {
+    const input = screen.getByLabelText("Message");
+    fireEvent.change(input, { target: { value } });
+    return input;
+  };
+
+  it("opens the menu listing /compact when the input starts with '/'", () => {
+    render(<ChatComposer onSend={vi.fn()} messageCount={2} />);
+    expect(screen.queryByRole("listbox")).toBeNull();
+    typed("/");
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /compact/i })).toBeInTheDocument();
+  });
+
+  it("opens the menu even on an empty conversation (discoverable before the first turn)", () => {
+    render(<ChatComposer onSend={vi.fn()} messageCount={0} />);
+    typed("/");
+    expect(screen.getByRole("option", { name: /compact/i })).toBeInTheDocument();
+  });
+
+  it("filters by prefix and closes when the '/' is removed", () => {
+    render(<ChatComposer onSend={vi.fn()} messageCount={2} />);
+    typed("/co");
+    expect(screen.getByRole("option", { name: /compact/i })).toBeInTheDocument();
+    typed("hello");
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("closes once a space is typed — the rest is the command's argument", () => {
+    render(<ChatComposer onSend={vi.fn()} messageCount={2} />);
+    typed("/compact");
+    expect(screen.getByRole("listbox")).toBeInTheDocument();
+    typed("/compact keep key insights");
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("Tab completes the highlighted command into the input (no send)", () => {
+    const onSend = vi.fn();
+    render(<ChatComposer onSend={onSend} messageCount={2} />);
+    const input = typed("/comp");
+    fireEvent.keyDown(input, { key: "Tab" });
+    expect(input).toHaveValue("/compact ");
+    expect(onSend).not.toHaveBeenCalled();
+    // The menu has closed (a space now separates the argument).
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("clicking a command completes it into the input too", () => {
+    const onSend = vi.fn();
+    render(<ChatComposer onSend={onSend} messageCount={2} />);
+    typed("/");
+    fireEvent.mouseDown(screen.getByRole("option", { name: /compact/i }));
+    expect(screen.getByLabelText("Message")).toHaveValue("/compact ");
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("Enter sends the composed command line, argument and all", () => {
+    const onSend = vi.fn();
+    render(<ChatComposer onSend={onSend} messageCount={2} />);
+    const input = typed("/compact keep key insights");
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onSend).toHaveBeenCalledWith("/compact keep key insights", []);
+  });
+
+  it("closes on Escape without sending", () => {
+    const onSend = vi.fn();
+    render(<ChatComposer onSend={onSend} messageCount={2} />);
+    const input = typed("/");
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it("does not open the menu for a plain (non-slash) message", () => {
+    const onSend = vi.fn();
+    render(<ChatComposer onSend={onSend} messageCount={2} />);
+    const input = typed("hello there");
+    expect(screen.queryByRole("listbox")).toBeNull();
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onSend).toHaveBeenCalledWith("hello there", []);
+  });
+
+  it("respects IME composition (Tab during isComposing does not complete a command)", () => {
+    render(<ChatComposer onSend={vi.fn()} messageCount={2} />);
+    const input = typed("/comp");
+    fireEvent.keyDown(input, { key: "Tab", isComposing: true });
+    expect(input).toHaveValue("/comp");
   });
 });
 

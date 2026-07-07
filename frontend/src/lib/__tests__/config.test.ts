@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DEFAULT_CONTEXT_WINDOW,
   DEFAULT_UPLOAD_ACCEPT,
   isChatEndpointMissing,
+  parseContextWindow,
   parseDevToolsEnabled,
   parseSamplePrompts,
   parseUploadAccept,
@@ -145,6 +147,23 @@ describe("parseDevToolsEnabled (FR-026)", () => {
       expect(parseDevToolsEnabled(raw)).toBe(false);
     },
   );
+});
+
+describe("parseContextWindow (004)", () => {
+  it("defaults to DEFAULT_CONTEXT_WINDOW when unset/blank", () => {
+    expect(parseContextWindow(undefined)).toBe(DEFAULT_CONTEXT_WINDOW);
+    expect(parseContextWindow("   ")).toBe(DEFAULT_CONTEXT_WINDOW);
+  });
+
+  it("parses a configured token count", () => {
+    expect(parseContextWindow("128000")).toBe(128000);
+  });
+
+  it("falls back to the default on non-numeric / zero / negative", () => {
+    expect(parseContextWindow("not a number")).toBe(DEFAULT_CONTEXT_WINDOW);
+    expect(parseContextWindow("0")).toBe(DEFAULT_CONTEXT_WINDOW);
+    expect(parseContextWindow("-5")).toBe(DEFAULT_CONTEXT_WINDOW);
+  });
 });
 
 describe("isChatEndpointMissing", () => {

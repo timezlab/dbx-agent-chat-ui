@@ -72,9 +72,14 @@ function Stepper({
 }) {
   const [inputValue, setInputValue] = React.useState<string>(String(value));
 
-  React.useEffect(() => {
+  // Resync the local draft when the controlled `value` changes — done during render (the
+  // React-recommended derived-state pattern) rather than in an effect, which avoids an extra
+  // commit and the react-hooks/set-state-in-effect cascade warning.
+  const [prevValue, setPrevValue] = React.useState<number>(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
     setInputValue(String(value));
-  }, [value]);
+  }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let val = e.target.value;

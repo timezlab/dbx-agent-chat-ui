@@ -571,7 +571,10 @@ addOutput(outputText);
 // Usage / metrics for the reply (per-reply footer). tokens + cost are backend-only (the UI
 // can't derive them); duration_ms + ttft_ms are OPTIONAL — the live client clock measures
 // them while streaming, but sending them here means a RELOADED conversation still shows total
-// time + TTFT. MUST arrive BEFORE the terminal `message` item, which closes the stream.
+// time + TTFT. context_used/context_window feed the context-window meter (004): occupancy is
+// context_used (a point-in-time Checkpoint size, NOT the cumulative total_tokens) over
+// context_window. 128k/200k → ~64% so the ring shows a filled, click-to-/compact gauge in the
+// mock. MUST arrive BEFORE the terminal `message` item, which closes the stream.
 events.push(
   JSON.stringify({
     type: "response.completed",
@@ -583,6 +586,8 @@ events.push(
         cost_usd: 0.0623,
         duration_ms: 42600,
         ttft_ms: 1840,
+        context_used: 128000,
+        context_window: 200000,
       },
     },
   }),

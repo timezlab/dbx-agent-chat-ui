@@ -22,6 +22,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { isBlank } from "@/lib/chat/queue";
+import type { ContextUsage } from "@/lib/chat/metrics";
+import {
+  matchCommands,
+  type SlashCommand,
+  type SlashCommandContext,
+} from "@/lib/chat/slash-commands";
+import { ContextMeter } from "./context-meter";
+import { SlashCommandMenu } from "./slash-command-menu";
 import { TodoCard } from "./todo-card";
 
 export interface ChatComposerProps
@@ -52,6 +60,14 @@ export interface ChatComposerProps
   uploadAccept?: string;
   /** Max size per attached file, in bytes (T071). */
   uploadMaxSizeBytes?: number;
+  /** Whether the usage surface is enabled — gates the context-window meter (004). */
+  usageEnabled?: boolean;
+  /** Current context-window occupancy for the toolbar meter (004). */
+  contextUsage?: ContextUsage;
+  /** Turn count in the conversation — the compact control needs a non-empty thread (004). */
+  messageCount?: number;
+  /** Explicit compact handler; defaults to sending the verbatim `/compact` turn (004). */
+  onCompact?: () => void;
 }
 
 function generateAttachmentId(): string {
@@ -97,9 +113,16 @@ export function ChatComposer({
   uploadEnabled = false,
   uploadAccept,
   uploadMaxSizeBytes,
+  usageEnabled = false,
+  contextUsage,
+  messageCount = 0,
+  onCompact,
   className,
   ...props
 }: ChatComposerProps) {
+  // The context ring doubles as the manual /compact control (004): it becomes clickable
+  // once occupancy passes the threshold; here we just supply the handler + busy state.
+  const compactHandler = onCompact ?? (() => onSend("/compact", []));
   const [text, setText] = React.useState("");
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
   const [attachError, setAttachError] = React.useState<string | null>(null);
@@ -120,7 +143,78 @@ export function ChatComposer({
     setAttachError(null);
   };
 
+  // Slash-command suggester (US3). The menu opens when the input begins with "/" and matches a
+  // command; the composer owns the open state + keyboard nav (focus stays in the textarea).
+  const [activeIndex, setActiveIndex] = React.useState(0);
+  const [menuDismissed, setMenuDismissed] = React.useState(false);
+  const commandContext = React.useMemo<SlashCommandContext>(
+    () => ({
+      messageCount,
+      submit: (value) => {
+        onSend(value, []);
+        setText("");
+        setAttachments([]);
+        setAttachError(null);
+      },
+    }),
+    [messageCount, onSend],
+  );
+  // The suggester is an autocomplete over the FIRST token only: it stays open while the user is
+  // typing the command word (leading "/", no space yet). Once a space is typed the command is
+  // "committed" and the rest is treated as its argument, so the menu closes and Enter sends the
+  // whole line (e.g. "/compact keep key insights"). Only currently-available commands are shown.
+  const isCommandToken = text.startsWith("/") && !text.includes(" ");
+  const matches = React.useMemo(
+    () =>
+      isCommandToken
+        ? matchCommands(text).filter((c) => !c.disabled?.(commandContext))
+        : [],
+    [isCommandToken, text, commandContext],
+  );
+  const menuOpen = matches.length > 0 && !menuDismissed;
+
+  // Tab / click completes the highlighted command INTO the textarea (name + space) so the user
+  // can append an argument, rather than sending it immediately (that is Enter's job).
+  const completeCommand = (command: SlashCommand) => {
+    if (command.disabled?.(commandContext)) return;
+    setText(`${command.name} `);
+    setActiveIndex(0);
+    setMenuDismissed(false);
+  };
+
+  const onTextChange = (value: string) => {
+    setText(value);
+    setActiveIndex(0);
+    setMenuDismissed(false);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // While the suggester is open: arrows move the highlight, Tab completes it into the input
+    // (so an argument can follow), Escape dismisses. Enter is NOT intercepted — it sends the
+    // current line as usual, whether that is a bare command or a command plus its argument.
+    if (menuOpen && !e.nativeEvent.isComposing) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActiveIndex((i) => (i + 1) % matches.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveIndex((i) => (i - 1 + matches.length) % matches.length);
+        return;
+      }
+      if (e.key === "Tab") {
+        e.preventDefault();
+        completeCommand(matches[activeIndex]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMenuDismissed(true);
+        return;
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       submit();
@@ -194,13 +288,25 @@ export function ChatComposer({
   };
 
   return (
-    <form
-      data-slot="chat-composer"
-      className={cn(
-        "flex flex-col rounded-2xl border border-input bg-background shadow-sm transition-[border-color,box-shadow,background-color] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/40 relative overflow-hidden",
-        isDragging && uploadEnabled && !disabled && "border-ring/50 ring-2 ring-ring/20",
-        className,
-      )}
+    // Relative wrapper so the suggester can anchor ABOVE the input while escaping the form's
+    // `overflow-hidden` (which clips the rounded card + drag overlay). The menu is a sibling of
+    // the form, not a descendant, so it is never cropped.
+    <div data-slot="chat-composer-root" className="relative">
+      {menuOpen ? (
+        <SlashCommandMenu
+          commands={matches}
+          activeIndex={activeIndex}
+          context={commandContext}
+          onSelect={completeCommand}
+        />
+      ) : null}
+      <form
+        data-slot="chat-composer"
+        className={cn(
+          "flex flex-col rounded-2xl border border-input bg-background shadow-sm transition-[border-color,box-shadow,background-color] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/40 relative overflow-hidden",
+          isDragging && uploadEnabled && !disabled && "border-ring/50 ring-2 ring-ring/20",
+          className,
+        )}
       onSubmit={(e) => {
         e.preventDefault();
         submit();
@@ -268,7 +374,7 @@ export function ChatComposer({
         <Textarea
           data-slot="chat-composer-input"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => onTextChange(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={disabled}
           placeholder={placeholder}
@@ -287,6 +393,13 @@ export function ChatComposer({
             accept={uploadAccept}
             onPick={handleFilesPicked}
           />
+          {usageEnabled && contextUsage ? (
+            <ContextMeter
+              usage={contextUsage}
+              onCompact={compactHandler}
+              busy={busy}
+            />
+          ) : null}
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -344,7 +457,8 @@ export function ChatComposer({
           )}
         </div>
       </div>
-    </form>
+      </form>
+    </div>
   );
 }
 

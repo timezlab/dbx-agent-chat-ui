@@ -6,6 +6,7 @@ import { TriangleAlertIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OverlayScroll } from "@/components/overlay-scroll";
 import { firstTodoWriteCallId, selectLatestTodos } from "@/lib/chat/todos";
+import { resolveContextUsage } from "@/lib/chat/metrics";
 import { useChatContext } from "./chat-provider";
 import { MessageList } from "./messages/message-list";
 import { MessageListSkeleton } from "./messages/message-list-skeleton";
@@ -48,10 +49,17 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
     replayResetTiming,
     replaySetSpeed,
     usageEnabled,
+    contextWindow,
   } = useChatContext();
   const todos = selectLatestTodos(messages);
   const firstPlanCallId = firstTodoWriteCallId(messages);
   const empty = messages.length === 0;
+  // Near-realtime meter reading: recomputed whenever the timeline changes (a settled reply
+  // folds its backend usage onto the last assistant turn), gated at render by `usageEnabled`.
+  const contextUsage = React.useMemo(
+    () => resolveContextUsage(messages, contextWindow),
+    [messages, contextWindow],
+  );
 
   return (
     <div
@@ -134,6 +142,9 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
             uploadEnabled={uploadEnabled}
             uploadAccept={uploadAccept}
             uploadMaxSizeBytes={uploadMaxSizeBytes}
+            usageEnabled={usageEnabled}
+            contextUsage={contextUsage}
+            messageCount={messages.length}
           />
         )}
       </div>
