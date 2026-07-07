@@ -1,7 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { ArrowUpIcon, PaperclipIcon, SquareIcon, XIcon } from "lucide-react";
+import {
+  ArrowUpIcon,
+  PaperclipIcon,
+  ShrinkIcon,
+  SquareIcon,
+  XIcon,
+} from "lucide-react";
 
 import type { Agent, Attachment, Todo } from "@/entities";
 import { cn } from "@/lib/utils";
@@ -58,6 +64,10 @@ export interface ChatComposerProps
   usageEnabled?: boolean;
   /** Current context-window occupancy for the toolbar meter (004). */
   contextUsage?: ContextUsage;
+  /** Turn count in the conversation — the compact control needs a non-empty thread (004). */
+  messageCount?: number;
+  /** Explicit compact handler; defaults to sending the verbatim `/compact` turn (004). */
+  onCompact?: () => void;
 }
 
 function generateAttachmentId(): string {
@@ -105,9 +115,13 @@ export function ChatComposer({
   uploadMaxSizeBytes,
   usageEnabled = false,
   contextUsage,
+  messageCount = 0,
+  onCompact,
   className,
   ...props
 }: ChatComposerProps) {
+  const canCompact = !disabled && !busy && messageCount > 0;
+  const runCompact = onCompact ?? (() => onSend("/compact", []));
   const [text, setText] = React.useState("");
   const [attachments, setAttachments] = React.useState<Attachment[]>([]);
   const [attachError, setAttachError] = React.useState<string | null>(null);
@@ -295,6 +309,7 @@ export function ChatComposer({
             accept={uploadAccept}
             onPick={handleFilesPicked}
           />
+          <CompactButton disabled={!canCompact} onCompact={runCompact} />
           {usageEnabled && contextUsage ? (
             <ContextMeter usage={contextUsage} className="min-w-0 truncate" />
           ) : null}
@@ -418,6 +433,45 @@ function UploadButton({
         <TooltipContent>
           {enabled ? "Attach files" : "Attachments are disabled"}
         </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+/**
+ * The manual `/compact` affordance (US2). Runs `/compact` as a normal user turn — the backend
+ * recognizes the verbatim text and compacts the Checkpoint (see ADR request-context-ownership).
+ * Disabled on an empty thread or mid-generation; a tooltip explains the action either way.
+ */
+function CompactButton({
+  disabled,
+  onCompact,
+}: {
+  disabled: boolean;
+  onCompact: () => void;
+}) {
+  return (
+    // Local provider so the composer renders standalone (customization contract).
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {/* Wrap so the tooltip still fires while the button is disabled. */}
+          <span className="inline-flex">
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-8 text-muted-foreground"
+              disabled={disabled}
+              onClick={onCompact}
+              data-slot="chat-composer-compact"
+              aria-label="Compact context"
+            >
+              <ShrinkIcon />
+            </Button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>Compact context (/compact)</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );

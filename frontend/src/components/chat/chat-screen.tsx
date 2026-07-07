@@ -144,6 +144,7 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
             uploadMaxSizeBytes={uploadMaxSizeBytes}
             usageEnabled={usageEnabled}
             contextUsage={contextUsage}
+            messageCount={messages.length}
           />
         )}
       </div>

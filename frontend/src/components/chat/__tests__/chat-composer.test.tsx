@@ -167,6 +167,36 @@ describe("ChatComposer — context-window meter (004)", () => {
   });
 });
 
+describe("ChatComposer — /compact control (US2)", () => {
+  it("sends the verbatim /compact turn on click", () => {
+    const onSend = vi.fn();
+    render(<ChatComposer onSend={onSend} messageCount={2} />);
+    fireEvent.click(screen.getByRole("button", { name: /compact/i }));
+    expect(onSend).toHaveBeenCalledWith("/compact", []);
+  });
+
+  it("is disabled on an empty conversation", () => {
+    render(<ChatComposer onSend={vi.fn()} messageCount={0} />);
+    expect(screen.getByRole("button", { name: /compact/i })).toBeDisabled();
+  });
+
+  it("is disabled while a generation is busy", () => {
+    render(<ChatComposer onSend={vi.fn()} messageCount={2} busy />);
+    expect(screen.getByRole("button", { name: /compact/i })).toBeDisabled();
+  });
+
+  it("prefers an explicit onCompact handler when provided", () => {
+    const onCompact = vi.fn();
+    const onSend = vi.fn();
+    render(
+      <ChatComposer onSend={onSend} onCompact={onCompact} messageCount={2} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /compact/i }));
+    expect(onCompact).toHaveBeenCalledOnce();
+    expect(onSend).not.toHaveBeenCalled();
+  });
+});
+
 describe("ChatComposer — toolbar: agent dropdown (US5, FR-026)", () => {
   const agents = [
     { id: "a1", name: "Analyst" },

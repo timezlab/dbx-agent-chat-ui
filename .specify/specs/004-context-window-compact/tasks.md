@@ -140,19 +140,19 @@ user message + streamed assistant summary appear; meter reflects backend-reporte
 
 ### Tests first
 
-- [ ] T020 [P] [US2] Test `frontend/src/lib/chat/__tests__/slash-commands.test.ts`:
+- [x] T020 [P] [US2] Test `frontend/src/lib/chat/__tests__/slash-commands.test.ts`:
   `matchCommands("/co")` returns `/compact`; `matchCommands("hi")` empty; `/compact` marked
   disabled when `messageCount === 0`.
-- [ ] T021 [P] [US2] Test in `chat-composer.test.tsx`: clicking the compact control calls
+- [x] T021 [P] [US2] Test in `chat-composer.test.tsx`: clicking the compact control calls
   `onSend("/compact", [])`; control is disabled while `busy` and when the conversation is
   empty.
 
 ### Implementation
 
-- [ ] T022 [P] [US2] Create `frontend/src/lib/chat/slash-commands.ts`: `SlashCommand` +
+- [x] T022 [P] [US2] Create `frontend/src/lib/chat/slash-commands.ts`: `SlashCommand` +
   `SlashCommandContext` types, `matchCommands(prefix)`, and `SLASH_COMMANDS` with `/compact`
   (`run = ctx.submit("/compact")`, disabled when `messageCount === 0`) — makes T020 pass.
-- [ ] T023 [US2] Add the toolbar compact button to `chat-composer.tsx` (icon + tooltip),
+- [x] T023 [US2] Add the toolbar compact button to `chat-composer.tsx` (icon + tooltip),
   calling `onCompact ?? (() => onSend("/compact", []))`; disabled while `busy` or empty (makes
   T021 pass; depends T022).
 
