@@ -151,6 +151,25 @@ describe("createResponsesParser — Databricks Playground Responses → ChatStre
     ).toEqual([{ type: "usage", totalTokens: 42 }]);
   });
 
+  it("maps usage.context_used (and checkpoint_tokens alias) → contextUsed", () => {
+    const p = createResponsesParser();
+    // Occupancy is a distinct field from the cumulative total_tokens.
+    expect(
+      p.map({
+        type: "response.completed",
+        response: { usage: { total_tokens: 5000, context_used: 42000 } },
+      }),
+    ).toEqual([{ type: "usage", totalTokens: 5000, contextUsed: 42000 }]);
+    // `checkpoint_tokens` is accepted as an alias when `context_used` is absent.
+    expect(
+      p.map({ type: "response.completed", usage: { checkpoint_tokens: 8000 } }),
+    ).toEqual([{ type: "usage", contextUsed: 8000 }]);
+    // Absent ⇒ the field is simply omitted (no proxy from totals).
+    expect(
+      p.map({ type: "response.completed", usage: { total_tokens: 42 } }),
+    ).toEqual([{ type: "usage", totalTokens: 42 }]);
+  });
+
   it("carries a backend per-tool duration_ms onto the done tool event", () => {
     const p = createResponsesParser();
     p.map({

@@ -26,6 +26,11 @@ export interface ChatTransport {
 }
 ```
 
+`ChatRequest` is a **thin request** — it carries only the current user turn (`query` +
+optional `attachments`) plus `conversationId`, never the full history array. The backend owns
+the accumulating Checkpoint (working context) and the durable History table, both keyed by
+`conversationId`. See ADR [`request-context-ownership.md`](./request-context-ownership.md).
+
 | Adapter | Purpose |
 | --- | --- |
 | `staticProxyTransport` | Browser calls the notebook/proxy-exported backend endpoint. |
@@ -57,10 +62,15 @@ Use an event reducer similar to Lakemind's pattern:
 #### Usage / metrics events (per-reply time · TTFT · tokens · cost)
 
 The neutral event vocabulary carries a non-terminal **`usage`** event
-(`{ inputTokens?, outputTokens?, totalTokens?, costUsd?, durationMs?, ttftMs? }`) and an
-optional **`durationMs`** on the `tool` event. The Responses parser maps a
-`response.completed` frame — or any frame carrying `usage` / `databricks_output.usage` — to
-a `usage` event, and reads `duration_ms` off a `function_call_output` for per-tool run time.
+(`{ inputTokens?, outputTokens?, totalTokens?, costUsd?, durationMs?, ttftMs?, contextUsed?,
+contextWindow? }`) and an optional **`durationMs`** on the `tool` event. The Responses parser
+maps a `response.completed` frame — or any frame carrying `usage` / `databricks_output.usage`
+— to a `usage` event, and reads `duration_ms` off a `function_call_output` for per-tool run
+time. `contextUsed` (wire `context_used`/`checkpoint_tokens`) + `contextWindow` (wire
+`context_window`/`max_tokens`) feed the context-window meter — occupancy is `contextUsed` (the
+backend Checkpoint size), deliberately **not** `totalTokens`, which for a looping agent is
+cumulative billing across internal steps. See ADR
+[`context-meter-occupancy-source.md`](./context-meter-occupancy-source.md).
 The reducer attaches usage to the **last assistant turn regardless of `activeId`** (it may
 arrive around the terminal `done`), and threads the tool duration onto the timeline item;
 both land on `Message.metrics` / `ToolActivityItem.durationMs`, so they round-trip through

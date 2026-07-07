@@ -24,10 +24,9 @@ describe("slash-commands (US2/US3)", () => {
     expect(matchCommands("")).toEqual([]);
   });
 
-  it("marks /compact disabled on an empty conversation", () => {
+  it("keeps /compact always available (discoverable even before the first turn)", () => {
     const compact = SLASH_COMMANDS.find((c) => c.name === "/compact")!;
-    expect(compact.disabled?.(ctx({ messageCount: 0 }))).toBe(true);
-    expect(compact.disabled?.(ctx({ messageCount: 3 }))).toBe(false);
+    expect(compact.disabled).toBeUndefined();
   });
 
   it("runs /compact by submitting the verbatim command text", () => {

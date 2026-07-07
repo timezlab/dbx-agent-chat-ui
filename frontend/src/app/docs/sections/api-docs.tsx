@@ -33,20 +33,17 @@ function Endpoint({
 // ---------------------------------------------------------------------------
 
 const CHAT_TYPES = `// Request body — POSTed as JSON to the chat endpoint.
+// THIN REQUEST: only the CURRENT user turn is sent, never prior history. The backend owns
+// the accumulating working context ("Checkpoint") keyed by conversationId, and the durable
+// transcript (History table) it serves back for reload. Re-sending history would re-inflate
+// the Checkpoint and make /compact pointless. See ADR request-context-ownership.md.
 type ChatRequest = {
-  messages: ChatRequestMessage[];  // full history, oldest → newest
-  conversationId?: string;         // stable per session — lets the backend group
-                                   // turns into the conversation history serves back
+  query: string;                   // the current user turn ONLY (no history array)
+  attachments?: Attachment[];      // files on THIS turn only — never replayed on later turns
+  conversationId?: string;         // Checkpoint key — lets the backend group turns and
+                                   // continue the conversation it persists server-side
   agentId?: string;                // only when the agents API is set AND one is
                                    // selected — omitted for default routing
-};
-
-type ChatRequestMessage = {
-  role: "user" | "assistant";
-  content: string;                 // assistant turns: text parts flattened to one string
-  attachments?: Attachment[];      // ONLY on the turn being sent — replayed history
-                                   // turns never carry them (payload would grow
-                                   // exponentially per turn otherwise)
 };
 
 // A file the user attached, read client-side (FileReader → base64), shipped inline.
@@ -61,22 +58,16 @@ type Attachment = {
 const CHAT_REQUEST = `POST {NEXT_PUBLIC_CHAT_ENDPOINT_URL}
 Content-Type: application/json
 
+// Only the current turn — the backend appends it to History and feeds the Checkpoint.
 {
-  "messages": [
-    { "role": "user", "content": "Hello" },
-    { "role": "assistant", "content": "Hi! What can I do for you?" },
-    {
-      "role": "user",
-      "content": "Summarize this file",
-      "attachments": [{
-        "id": "att-1",
-        "name": "report.pdf",
-        "mimeType": "application/pdf",
-        "size": 48213,
-        "dataUrl": "data:application/pdf;base64,..."
-      }]
-    }
-  ],
+  "query": "Summarize this file",
+  "attachments": [{
+    "id": "att-1",
+    "name": "report.pdf",
+    "mimeType": "application/pdf",
+    "size": 48213,
+    "dataUrl": "data:application/pdf;base64,..."
+  }],
   "conversationId": "conv-delta-sql",
   "agentId": "agent-123"
 }`;
@@ -100,11 +91,15 @@ data: {"type": "response.output_item.done", "item": {"type": "function_call_outp
 // OPTIONAL usage — tokens + cost for the reply (shown in the metrics footer). Cost is
 // backend-provided; the UI never estimates it. "duration_ms"/"ttft_ms" are OPTIONAL: the
 // browser already measures total time + TTFT live, but sending them here lets a RELOADED
-// conversation still show them. Also read from a top-level "usage" or
+// conversation still show them. "context_used"/"context_window" feed the context-window
+// meter: context_used = CURRENT Checkpoint occupancy (a point-in-time size — NOT the
+// cumulative total_tokens, which for a looping agent sums every internal step), context_window
+// = its limit. Without context_used the meter is hidden. Also read from a top-level "usage" or
 // "databricks_output.usage". MUST arrive BEFORE the terminal "message" item below.
 data: {"type": "response.completed", "response": {"usage": {"input_tokens": 8450,
   "output_tokens": 2130, "total_tokens": 10580, "cost_usd": 0.0623,
-  "duration_ms": 42600, "ttft_ms": 1840}}}
+  "duration_ms": 42600, "ttft_ms": 1840,
+  "context_used": 128000, "context_window": 200000}}}
 
 // TERMINAL — the "message" item closes the turn (text already streamed via the
 // deltas above is NOT re-read from it).
@@ -216,6 +211,8 @@ type MessageMetrics = {
   costUsd?: number;                       // backend-computed; the UI never estimates it
   durationMs?: number;                    // total response time (ms)
   ttftMs?: number;                        // time to first token (ms)
+  contextUsed?: number;                   // Checkpoint occupancy (meter numerator; SSE context_used)
+  contextWindow?: number;                 // Checkpoint limit (meter denominator; SSE context_window)
 };`;
 
 const HISTORY_DETAIL = `GET {NEXT_PUBLIC_HISTORY_API_URL}/{id}   // e.g. /api/history/conv-delta-sql

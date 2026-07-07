@@ -26,7 +26,9 @@ There are genuinely **two different collections** that were being conflated:
 1. **History** — the durable, human-facing transcript, persisted in a **Databricks table**
    and read back via the History API for display/reload. Never compacted; it is the record.
 2. **Checkpoint** — the agent's **working context** (what the model actually reasons over).
-   This is what grows, what the meter measures, and what `/compact` shrinks.
+   This is what grows, what the meter measures, and what `/compact` shrinks. The meter reads
+   the Checkpoint size from a dedicated backend `context_used`, not from usage totals — see ADR
+   [`context-meter-occupancy-source.md`](./context-meter-occupancy-source.md).
 
 ## Decision
 

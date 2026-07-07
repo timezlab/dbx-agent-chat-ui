@@ -170,20 +170,20 @@ selects → submits the `/compact` turn; Esc / deleting `/` closes; ordinary tex
 
 ### Tests first
 
-- [ ] T024 [P] [US3] Test `slash-command-menu.test.tsx`: renders each command's name +
+- [x] T024 [P] [US3] Test `slash-command-menu.test.tsx`: renders each command's name +
   description and marks the active item.
-- [ ] T025 [US3] Test in `chat-composer.test.tsx`: `/` opens the menu; typing filters;
+- [x] T025 [US3] Test in `chat-composer.test.tsx`: `/` opens the menu; typing filters;
   ArrowUp/Down moves selection; Enter/Tab runs the highlighted command (submits `/compact`)
   without inserting a newline; Escape and deleting the leading `/` close it; a plain message
   (no leading `/`) sends normally. Interception respects `isComposing`.
 
 ### Implementation
 
-- [ ] T026 [P] [US3] Create `frontend/src/components/chat/slash-command-menu.tsx` — `Popover`
+- [x] T026 [P] [US3] Create `frontend/src/components/chat/slash-command-menu.tsx` — `Popover`
   anchored above the textarea wrapping `Command`/`CommandList`/`CommandItem` (from
   `components/ui/command.tsx`); `data-slot="slash-command-menu"`; forwards `className` (makes
   T024 pass).
-- [ ] T027 [US3] Integrate into `chat-composer.tsx`: `menuOpen` from `text.startsWith("/")`,
+- [x] T027 [US3] Integrate into `chat-composer.tsx`: `menuOpen` from `text.startsWith("/")`,
   `activeIndex` state, `matchCommands(text)`; extend `handleKeyDown` to intercept
   Arrow/Enter/Tab/Escape before the existing submit (guard `isComposing`); selecting a command
   runs its `run` and clears the input (makes T025 pass; depends T026, T022).
@@ -194,15 +194,25 @@ selects → submits the `/compact` turn; Esc / deleting `/` closes; ordinary tex
 
 ## Phase 7: Polish & Docs (cross-cutting)
 
-- [ ] T028 [P] [POL] Update `frontend/src/app/docs/sections/api-docs.tsx`: request example →
-  current turn + `conversationId` (drop full-history array); add `context_window` to the
-  `usage` example + `MessageMetrics` type; add the two-layer (History table vs Checkpoint)
-  note and the `/compact` behavior line.
-- [ ] T029 [P] [POL] Update `frontend/src/app/docs/sections/backend-integration.tsx`: thin
-  request (backend owns context by `conversationId`); `usage.context_window` optional;
-  `/compact` is a normal user turn the backend regex-recognizes to compact the Checkpoint.
-- [ ] T030 [P] [POL] Reconcile `docs/design-docs/chat-transport.md` with the thin-request
-  contract; link the new ADR.
+- [x] T028 [P] [POL] Update `frontend/src/app/docs/sections/api-docs.tsx`: request example →
+  `query` + `conversationId` (drop full-history array); add `context_used` + `context_window`
+  to the `usage` example + `MessageMetrics` type; the meter-occupancy note (context_used, not
+  total_tokens) and the `/compact` behavior line.
+- [x] T029 [P] [POL] Update `frontend/src/app/docs/sections/backend-integration.tsx`: thin
+  request (backend owns Checkpoint by `conversationId`, reads `query`); `context_used`/
+  `context_window` optional on `usage`; `/compact` is a normal user turn the backend
+  recognizes to compact the Checkpoint (re-emit `usage` with smaller `context_used`).
+- [x] T030 [P] [POL] Reconcile `docs/design-docs/chat-transport.md` with the thin-request
+  contract (thin `ChatRequest` note) + the `usage` event's `contextUsed`/`contextWindow`; link
+  both ADRs.
+- [x] T032 [POL] **Occupancy source correction (user, post-review):** the meter must read a
+  backend `context_used` (Checkpoint occupancy), NOT `resolveTotalTokens` — a looping agent's
+  usage totals are cumulative billing and over-report. Added `MessageMetrics.contextUsed` +
+  `usage.contextUsed` (wire `context_used`/`checkpoint_tokens`), mapped in `responses.ts`,
+  folded in `reducer.ts`; `resolveContextUsage` now keys off `contextUsed` only (no proxy →
+  meter hidden when absent). `resolveTotalTokens` kept for the per-reply footer. Mock generator
+  emits `context_used`/`context_window`. New ADR `context-meter-occupancy-source.md`; spec 004
+  updated. Tests: metrics/responses/reducer.
 - [ ] T031 [POL] Full gate: `pnpm lint && pnpm typecheck && pnpm test && pnpm build` all green
   (static-export safe). Verify no SSE recording/mock regen is needed (request-shape change
   doesn't touch response recordings). Fix any fallout.

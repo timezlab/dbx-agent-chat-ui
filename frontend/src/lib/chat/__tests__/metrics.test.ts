@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Message, MessageMetrics } from "@/entities";
 import {
+  contextPct,
   formatCost,
   formatDuration,
   formatTokens,
@@ -80,52 +81,86 @@ describe("metrics formatters", () => {
 });
 
 describe("resolveContextUsage (004)", () => {
-  it("measures the last assistant turn's occupancy against the config limit", () => {
+  it("takes occupancy from the last assistant turn's backend context_used", () => {
     const usage = resolveContextUsage(
-      [user(), assistant({ totalTokens: 12400 })],
+      [user(), assistant({ contextUsed: 12400 })],
       200000,
     );
-    expect(usage).toEqual({ used: 12400, limit: 200000, pct: 6, level: "normal" });
+    expect(usage).toEqual({ used: 12400, limit: 200000, level: "normal" });
+  });
+
+  it("ignores total_tokens for the meter — occupancy comes only from context_used", () => {
+    // A looping agent reports a large cumulative total_tokens; without context_used the
+    // meter must NOT treat that as occupancy — it stays unknown (renders nothing).
+    expect(
+      resolveContextUsage([assistant({ totalTokens: 500000 })], 200000).level,
+    ).toBe("unknown");
+    // When both are present, context_used wins as the numerator (not total_tokens).
+    const usage = resolveContextUsage(
+      [assistant({ totalTokens: 500000, contextUsed: 42000 })],
+      200000,
+    );
+    expect(usage.used).toBe(42000);
   });
 
   it("prefers the backend-reported contextWindow over the config limit", () => {
     const usage = resolveContextUsage(
-      [assistant({ totalTokens: 64000, contextWindow: 128000 })],
+      [assistant({ contextUsed: 64000, contextWindow: 128000 })],
       200000,
     );
     expect(usage.limit).toBe(128000);
-    expect(usage.pct).toBe(50);
     expect(usage.level).toBe("normal");
   });
 
   it("flags warn at ≥70% and danger at ≥90%", () => {
-    expect(resolveContextUsage([assistant({ totalTokens: 140000 })], 200000).level).toBe(
+    expect(resolveContextUsage([assistant({ contextUsed: 140000 })], 200000).level).toBe(
       "warn",
     );
-    expect(resolveContextUsage([assistant({ totalTokens: 185000 })], 200000).level).toBe(
+    expect(resolveContextUsage([assistant({ contextUsed: 185000 })], 200000).level).toBe(
       "danger",
     );
   });
 
-  it("clamps the percentage to 0–100 when usage overflows the limit", () => {
-    const usage = resolveContextUsage([assistant({ totalTokens: 260000 })], 200000);
-    expect(usage.pct).toBe(100);
+  it("classifies an overflow (used > limit) as danger", () => {
+    const usage = resolveContextUsage([assistant({ contextUsed: 260000 })], 200000);
     expect(usage.level).toBe("danger");
+    expect(contextPct(usage)).toBe(100); // derived + clamped
   });
 
-  it("reads the LAST assistant turn that carries resolvable tokens", () => {
+  it("reads the LAST assistant turn that carries context_used", () => {
     const usage = resolveContextUsage(
-      [assistant({ totalTokens: 1000 }), user(), assistant({ totalTokens: 5000 })],
+      [assistant({ contextUsed: 1000 }), user(), assistant({ contextUsed: 5000 })],
       200000,
     );
     expect(usage.used).toBe(5000);
   });
 
-  it("is unknown when no assistant turn has resolvable tokens", () => {
+  it("skips turns without context_used, using the latest that has it", () => {
+    const usage = resolveContextUsage(
+      [
+        assistant({ contextUsed: 1000 }),
+        user(),
+        assistant({ totalTokens: 999999 }), // billing only, no occupancy → skipped
+      ],
+      200000,
+    );
+    expect(usage.used).toBe(1000);
+  });
+
+  it("is unknown when no assistant turn carries context_used", () => {
     expect(resolveContextUsage([user()], 200000).level).toBe("unknown");
     expect(resolveContextUsage([assistant()], 200000).level).toBe("unknown");
-    expect(resolveContextUsage([assistant({ costUsd: 0.01 })], 200000).level).toBe(
+    expect(resolveContextUsage([assistant({ totalTokens: 12400 })], 200000).level).toBe(
       "unknown",
     );
+  });
+});
+
+describe("contextPct (004)", () => {
+  it("derives a clamped integer percent from used/limit", () => {
+    expect(contextPct({ used: 12400, limit: 200000 })).toBe(6);
+    expect(contextPct({ used: 100000, limit: 200000 })).toBe(50);
+    expect(contextPct({ used: 260000, limit: 200000 })).toBe(100); // clamped
+    expect(contextPct({ used: 10, limit: 0 })).toBe(0); // no divide-by-zero
   });
 });

@@ -29,8 +29,27 @@ the summary.
    needs a denominator (e.g. 200k). Use a backend-reported `contextWindow` on the usage
    frame when present; otherwise fall back to a configured `NEXT_PUBLIC_CONTEXT_WINDOW`
    default.
+   - **Occupancy numerator = backend `context_used` only (refined during implementation).**
+     The meter's *used* value comes from a dedicated backend field `context_used` (wire
+     snake_case; `checkpoint_tokens` alias) — the current Checkpoint token count. It is **not**
+     derived from `total_tokens`/`input_tokens`: the Databricks ResponsesAgent is a *looping*
+     agent, so its `usage` totals are cumulative billing across internal tool-steps (several ×
+     the real occupancy), not a point-in-time window size. When no turn carries `context_used`,
+     the meter is `unknown` and **renders nothing** — there is no proxy fallback (a fabricated
+     near-full ring is worse than an absent one). `resolveTotalTokens` stays, but only for the
+     per-reply footer. See ADR
+     [`context-meter-occupancy-source.md`](../../../docs/design-docs/context-meter-occupancy-source.md).
 3. **Meter placement = composer toolbar, gated by the existing usage flag**
    (`NEXT_PUBLIC_SHOW_USAGE`). No new visibility flag.
+   - **Presentation (refined during implementation, per user):** the meter is a **circular
+     ring** whose arc fills with occupancy percent (muted → amber ≥70% → red ≥90%), not a
+     `used/limit·%` text chip. The percentage is **derived** from `used/limit` at render —
+     `ContextUsage` stores only `used`, `limit`, and the classified `level` (no stored `pct`).
+   - **The ring doubles as the manual compact control:** once occupancy reaches
+     `COMPACT_MIN_TOKENS` (≈50k) the ring becomes a **button** that runs `/compact` (disabled
+     while a generation streams); below that, or when the usage surface is off, it is a plain
+     gauge. `/compact` is also always reachable by typing it (US3 suggester). There is no
+     separate compact icon-button.
 4. **Thin request / backend-owned context (foundational).** The chat request stops sending the
    full history array; it sends **only the current user turn + `conversationId`**, and the
    backend owns the accumulated context ("checkpoint") keyed by `conversationId`. This is what
@@ -48,15 +67,18 @@ The backend keeps two distinct things, both keyed by `conversationId`:
    trimmed**; the UI shows every message from it. This is what `GET /conversation/{id}` returns.
 2. **Checkpoint** — the working context the agent actually reads to generate a reply. It
    accumulates per conversation and is what `/compact` reduces. Its size is what the meter
-   measures (via the backend-reported `input_tokens` of the latest turn).
+   measures — via a backend-reported **`context_used`** on the latest turn's usage frame (a
+   point-in-time Checkpoint size), NOT via `total_tokens`/`input_tokens` (which, for a looping
+   agent, are cumulative billing across internal steps). See ADR
+   [`context-meter-occupancy-source.md`](../../../docs/design-docs/context-meter-occupancy-source.md).
 
 Consequences for this feature:
 
 - The client sends only the current user turn + `conversationId`; the backend appends it to the
   History table and feeds the Checkpoint to the agent (thin request, settled decision #4).
 - Context occupancy = **Checkpoint size**, not History-table size. Compaction shrinks the
-  Checkpoint, so the next turn's `input_tokens` (and the meter) drop — while the full History
-  transcript, and the UI thread, stay intact.
+  Checkpoint, so the next turn's reported `context_used` (and the meter) drop — while the full
+  History transcript, and the UI thread, stay intact.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -167,9 +189,9 @@ itself does not assume one or the other.
 
 ### Edge Cases
 
-- **No usage available** (backend never sent tokens for the latest turn): the meter shows an
-  unknown/placeholder state (e.g. "—") rather than a false 0%, and never renders a bar it
-  can't compute.
+- **No `context_used` available** (backend never reported Checkpoint occupancy for any turn):
+  the meter is `unknown` and **renders nothing** — it does not fall back to `total_tokens` and
+  never shows a fabricated bar. (Per-reply usage tokens may still show in the footer.)
 - **Fresh conversation** (no assistant turn yet): the meter is hidden or shows `0 / limit`.
 - **Limit unknown** (no backend `contextWindow` and no env value): percentage is hidden;
   raw occupancy may still show. (The env default should normally prevent this.)
@@ -189,9 +211,12 @@ itself does not assume one or the other.
 
 **Context-window meter (US1)**
 
-- **FR-001**: The system MUST derive current context occupancy from the most recent assistant
-  turn that carries usage — the resolved total tokens (`totalTokens`, else
-  `inputTokens + outputTokens`) of that turn.
+- **FR-001**: The system MUST take current context occupancy from the most recent assistant
+  turn that carries a backend-reported **`context_used`** (wire snake_case; `checkpoint_tokens`
+  alias) — the current Checkpoint token count. It MUST NOT derive occupancy from
+  `totalTokens`/`inputTokens` (cumulative billing across a looping agent's internal steps). When
+  no turn carries `context_used`, occupancy is `unknown` and the meter renders nothing (no proxy
+  fallback). See ADR `context-meter-occupancy-source.md`.
 - **FR-002**: The system MUST determine the context limit as the backend-reported
   `contextWindow` when present on the usage frame, otherwise a configured
   `NEXT_PUBLIC_CONTEXT_WINDOW` default.
@@ -215,9 +240,10 @@ itself does not assume one or the other.
   compaction. Compaction operates on the **backend checkpoint**, not on user-visible history;
   all prior messages remain in the thread and the summary is appended as a normal assistant
   message.
-- **FR-010**: The context meter MUST reflect the compacted context through the **usage the
-  backend reports** (which counts the backend's checkpoint, not the raw messages the client
-  sent). No client-side token re-estimation or history editing is used to make the meter drop.
+- **FR-010**: The context meter MUST reflect the compacted context through the backend-reported
+  **`context_used`** (the backend's Checkpoint size, not the raw messages the client sent). The
+  backend re-emits a `usage` frame carrying the smaller `context_used` after `/compact`. No
+  client-side token re-estimation or history editing is used to make the meter drop.
 - **FR-011**: The system MUST prevent compaction from interleaving with an in-flight turn
   (disabled or queued while streaming), consistent with the composer's existing send behavior.
 - **FR-012**: The system MUST handle a `/compact` that has nothing to compact (informative
@@ -260,11 +286,14 @@ itself does not assume one or the other.
 
 ### Key Entities *(include if feature involves data)*
 
-- **ContextUsage (derived, not persisted)**: `{ used: number, limit: number | undefined,
-  pct: number | undefined, level: "normal" | "warn" | "danger" | "unknown" }` computed from
-  the latest assistant `Message.metrics` and the resolved limit.
-- **MessageMetrics (extended)**: gains an optional `contextWindow` number (backend-reported
-  limit), snake_case `context_window` on the wire, mapped in the usage extractor.
+- **ContextUsage (derived, not persisted)**: `{ used: number, limit: number,
+  level: "normal" | "warn" | "danger" | "unknown" }` computed from the latest assistant
+  `Message.metrics.contextUsed` and the resolved limit. The percentage is derived at render
+  (`contextPct = used / limit`), not stored.
+- **MessageMetrics (extended)**: gains an optional `contextUsed` number (backend Checkpoint
+  occupancy, wire `context_used`/`checkpoint_tokens`) — the meter's numerator — and an optional
+  `contextWindow` number (backend limit, wire `context_window`/`max_tokens`) — the denominator.
+  Both mapped in the usage extractor; both optional.
 - **CapabilityConfig / env (extended)**: gains a `contextWindow` default sourced from
   `NEXT_PUBLIC_CONTEXT_WINDOW`, following the existing `usageEnabled` config pattern.
 - **SlashCommand (registry entry)**: `{ name: string, description: string, run: (ctx) => void
@@ -295,11 +324,14 @@ itself does not assume one or the other.
 
 ## Assumptions
 
-- **Occupancy = Checkpoint size**: with the thin request, the latest assistant turn's
-  backend-reported tokens reflect the agent's Checkpoint (not the History table), so the meter
-  is an honest measure of what the model actually processes. Mid-stream (partial) estimation is
-  **out of scope for v1** — the meter updates on reply completion (the user's stated "nearly
-  realtime sau mỗi lần chat hoàn thành").
+- **Occupancy = Checkpoint size, reported as `context_used`**: with the thin request, the
+  backend owns the Checkpoint (not the History table). The meter is only honest if the backend
+  reports the Checkpoint's size directly as `context_used`; usage *totals* cannot be used
+  because a looping agent's totals are cumulative billing (ADR
+  `context-meter-occupancy-source.md`). Absent `context_used`, US1 degrades to a hidden meter
+  rather than a wrong one. Mid-stream (partial) estimation is **out of scope for v1** — the
+  meter updates on reply completion (the user's stated "nearly realtime sau mỗi lần chat hoàn
+  thành").
 - **Backend owns Checkpoint + History (load-bearing)**: the backend maintains, per
   `conversationId`, both a durable History table and an accumulating Checkpoint the agent
   reads, and both **persist** so a conversation continues after reload / in a new session

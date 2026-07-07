@@ -24,6 +24,13 @@ async def chat_endpoint(request: Request):
     last_event_id = request.headers.get("Last-Event-ID")
     body = await request.json()
     session_id = body.get("session_id", "default")
+    # THIN REQUEST: only the current turn arrives (query + optional attachments); the client
+    # never sends prior history. Load the accumulated Checkpoint yourself, keyed by
+    # conversationId, and append this turn to it (and to the durable History table).
+    query = body.get("query", "")
+    conversation_id = body.get("conversationId")
+    checkpoint = load_checkpoint(conversation_id)  # your server-side working context
+    checkpoint.append({"role": "user", "content": query})
 
     if session_id not in STREAM_BUFFER:
         STREAM_BUFFER[session_id] = []
@@ -54,7 +61,7 @@ async def chat_endpoint(request: Request):
         ACTIVE_STREAMS.add(session_id)
         try:
             llm_stream = await llm_client.chat.completions.create(
-                messages=body.get("messages", []),
+                messages=checkpoint,   # server-owned Checkpoint, not client history
                 stream=True
             )
 
@@ -143,6 +150,26 @@ export function BackendIntegrationSection() {
               want a <em>reloaded</em> conversation to show total time &amp; TTFT too.
               Emit it <em>before</em> the terminal{" "}
               <InlineCode>message</InlineCode> item (which closes the stream).
+            </li>
+            <li>
+              <strong className="text-foreground">
+                Context meter (Optional):
+              </strong>{" "}
+              add <InlineCode>&quot;context_used&quot;</InlineCode> and{" "}
+              <InlineCode>&quot;context_window&quot;</InlineCode> to the same{" "}
+              <InlineCode>usage</InlineCode> object to drive the context-window ring.{" "}
+              <InlineCode>context_used</InlineCode> is the <em>current</em> Checkpoint
+              size (a point-in-time occupancy) — <strong>not</strong>{" "}
+              <InlineCode>total_tokens</InlineCode>, which for a looping agent sums
+              every internal step and would over-report.{" "}
+              <InlineCode>context_window</InlineCode> is the limit (falls back to{" "}
+              <InlineCode>NEXT_PUBLIC_CONTEXT_WINDOW</InlineCode> if omitted). Without{" "}
+              <InlineCode>context_used</InlineCode> the ring stays hidden. When the{" "}
+              <InlineCode>query</InlineCode> is <InlineCode>/compact</InlineCode>{" "}
+              (optionally with guidance after it), summarize/shrink the Checkpoint
+              server-side, stream the summary as a normal reply, then re-emit{" "}
+              <InlineCode>usage</InlineCode> with the smaller{" "}
+              <InlineCode>context_used</InlineCode> so the ring drops.
             </li>
             <li>
               <strong className="text-foreground">Error Handling:</strong>{" "}

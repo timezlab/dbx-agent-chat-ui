@@ -27,9 +27,9 @@ export interface SlashCommand {
 export const SLASH_COMMANDS: SlashCommand[] = [
   {
     name: "/compact",
-    description: "Compact the conversation context to free up the window",
-    // Nothing to compact on an empty thread.
-    disabled: (ctx) => ctx.messageCount === 0,
+    description: "Compact the context — optionally add guidance, e.g. /compact keep key insights",
+    // Always available: the suggester should appear even on an empty composer so the command
+    // is discoverable before the first turn. Compaction with no prior context is a backend no-op.
     run: (ctx) => ctx.submit("/compact"),
   },
 ];

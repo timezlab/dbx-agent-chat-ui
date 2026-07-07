@@ -55,8 +55,11 @@ export const ChatStreamEventSchema = z.discriminatedUnion("type", [
     costUsd: z.number().optional(),
     durationMs: z.number().optional(),
     ttftMs: z.number().optional(),
-    // Backend Checkpoint size limit (wire snake_case `context_window`/`max_tokens` →
-    // camelCase here). Feeds the context-window meter (004); optional.
+    // Backend Checkpoint OCCUPANCY (wire snake_case `context_used`/`checkpoint_tokens`) — the
+    // meter's numerator. Distinct from `totalTokens` (cumulative billing); optional (004).
+    contextUsed: z.number().optional(),
+    // Backend Checkpoint size LIMIT (wire snake_case `context_window`/`max_tokens`) — the
+    // meter's denominator (004); optional.
     contextWindow: z.number().optional(),
   }),
   z.object({ type: z.literal("error"), message: z.string() }),
