@@ -1,12 +1,13 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { ArrowRightIcon, TerminalIcon, ShieldIcon, LayersIcon, SparklesIcon } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
 
 // Define our custom cubic-bezier easing for high-end feel
-const EASE: any = [0.32, 0.72, 0, 1];
+const EASE: [number, number, number, number] = [0.32, 0.72, 0, 1];
 
 export function WelcomeContent() {
   const reduce = useReducedMotion();
@@ -74,23 +75,23 @@ export function WelcomeContent() {
 
           <motion.div variants={safeFadeUp} className="flex flex-col sm:flex-row items-center gap-4 mt-12 w-full sm:w-auto">
             {/* Primary CTA - Button in Button pattern */}
-            <a 
-              href="/" 
+            <Link
+              href="/"
               className="group relative inline-flex items-center justify-between gap-4 pl-6 pr-2 py-2 rounded-full bg-foreground text-background font-medium active:scale-[0.98] transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] w-full sm:w-auto"
             >
               <span>Start Chatting</span>
               <div className="w-8 h-8 rounded-full bg-background/20 dark:bg-background/20 flex items-center justify-center transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-0.5 group-hover:-translate-y-[1px] group-hover:scale-105">
                 <ArrowRightIcon className="size-4" strokeWidth={1.25} />
               </div>
-            </a>
-            
+            </Link>
+
             {/* Secondary CTA */}
-            <a 
-              href="/docs" 
+            <Link
+              href="/docs"
               className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full border border-foreground/10 bg-transparent text-foreground font-medium hover:bg-foreground/5 transition-colors duration-300 active:scale-[0.98] w-full sm:w-auto"
             >
               Explore Capabilities
-            </a>
+            </Link>
           </motion.div>
         </motion.section>
 
@@ -148,7 +149,7 @@ function BentoCard({
   className?: string;
   delay: number;
 }) {
-  const EASE: any = [0.32, 0.72, 0, 1];
+  const EASE: [number, number, number, number] = [0.32, 0.72, 0, 1];
   const reduce = useReducedMotion();
   
   return (
