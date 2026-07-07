@@ -23,7 +23,7 @@ on top and US2 stays usable via the toolbar button if US3 slips.
 
 ## Phase 1: Setup
 
-- [ ] T001 Create branch `004-context-window-compact` from `main`.
+- [x] T001 Create branch `004-context-window-compact` from `main`.
 
 ---
 
@@ -33,29 +33,29 @@ on top and US2 stays usable via the toolbar button if US3 slips.
 
 ### Tests first
 
-- [ ] T002 [P] [FND] Test `parseContextWindow` in `frontend/src/lib/__tests__/config.test.ts`
+- [x] T002 [P] [FND] Test `parseContextWindow` in `frontend/src/lib/__tests__/config.test.ts`
   (create if absent): unset ⇒ `200000`; `"128000"` ⇒ `128000`; non-numeric/`"0"`/negative ⇒
   `200000`.
-- [ ] T003 [P] [FND] Test in `frontend/src/lib/chat/__tests__/responses.test.ts`: `extractUsage`
+- [x] T003 [P] [FND] Test in `frontend/src/lib/chat/__tests__/responses.test.ts`: `extractUsage`
   maps `usage.context_window` (and `usage.max_tokens` alias) → `contextWindow`; absent ⇒ field
   omitted.
-- [ ] T004 [P] [FND] Test in the reducer test file: a `usage` event with `contextWindow` folds
+- [x] T004 [P] [FND] Test in the reducer test file: a `usage` event with `contextWindow` folds
   onto `Message.metrics.contextWindow` via `mergeMetrics` (keep-present-only).
 
 ### Implementation
 
-- [ ] T005 [P] [FND] Add `contextWindow: z.number().optional()` to `MessageMetricsSchema`
+- [x] T005 [P] [FND] Add `contextWindow: z.number().optional()` to `MessageMetricsSchema`
   (`frontend/src/entities/message.ts`) and to the `usage` variant of `ChatStreamEventSchema`
   (`frontend/src/entities/transport.ts`), with a snake_case-vs-camelCase note.
-- [ ] T006 [P] [FND] In `extractUsage` (`frontend/src/lib/chat/responses.ts`) map
+- [x] T006 [P] [FND] In `extractUsage` (`frontend/src/lib/chat/responses.ts`) map
   `usage.context_window ?? usage.max_tokens` → `contextWindow` (makes T003 pass).
-- [ ] T007 [FND] In `mergeMetrics` (`frontend/src/lib/chat/reducer.ts`) add the
+- [x] T007 [FND] In `mergeMetrics` (`frontend/src/lib/chat/reducer.ts`) add the
   `contextWindow` fold line (makes T004 pass; depends T005).
-- [ ] T008 [FND] Config trio (mirror `usageEnabled`): add `NEXT_PUBLIC_CONTEXT_WINDOW`
+- [x] T008 [FND] Config trio (mirror `usageEnabled`): add `NEXT_PUBLIC_CONTEXT_WINDOW`
   (`frontend/src/env.ts` client + runtimeEnv), `contextWindow?: number`
   (`frontend/src/entities/config.ts`), and `parseContextWindow` (default `200000`) wired into
   `resolveConfig` (`frontend/src/lib/config.ts`) — makes T002 pass.
-- [ ] T009 [FND] Expose `contextWindow` from resolved config on the chat context
+- [x] T009 [FND] Expose `contextWindow` from resolved config on the chat context
   (`frontend/src/components/chat/chat-provider.tsx`), mirroring `usageEnabled` (depends T008).
 
 **Checkpoint**: limit + per-turn `contextWindow` available to the UI; tests T002–T004 green.
@@ -72,28 +72,28 @@ shows occupancy; send another message → meter updates on completion without re
 
 ### Tests first
 
-- [ ] T010 [P] [US1] Test `resolveContextUsage` in
+- [x] T010 [P] [US1] Test `resolveContextUsage` in
   `frontend/src/lib/chat/__tests__/metrics.test.ts`: used = resolved total of last assistant
   with metrics; `limit = metrics.contextWindow ?? configLimit` (backend wins); pct clamped
   0–100; level normal/warn(≥70%)/danger(≥90%); no metrics ⇒ `level:"unknown"`.
-- [ ] T011 [P] [US1] Test `ContextMeter` in
+- [x] T011 [P] [US1] Test `ContextMeter` in
   `frontend/src/components/chat/__tests__/context-meter.test.tsx`: renders `12.4k / 200k · 6%`
   (compact tokens), applies the level class, returns `null` when `level === "unknown"`.
 
 ### Implementation
 
-- [ ] T012 [US1] Add `ContextUsage` type, `resolveContextUsage(messages, configLimit)`, and
+- [x] T012 [US1] Add `ContextUsage` type, `resolveContextUsage(messages, configLimit)`, and
   `CONTEXT_WARN_PCT`/`CONTEXT_DANGER_PCT` to `frontend/src/lib/chat/metrics.ts` (makes T010
   pass).
-- [ ] T013 [US1] Create `frontend/src/components/chat/context-meter.tsx` — presentational,
+- [x] T013 [US1] Create `frontend/src/components/chat/context-meter.tsx` — presentational,
   `data-slot="context-meter"`, `formatTokens`, token-based level colors, forwards `className`
   via `cn(...)` (makes T011 pass; depends T012).
-- [ ] T014 [US1] Wire it: in `chat-screen.tsx` derive
+- [x] T014 [US1] Wire it: in `chat-screen.tsx` derive
   `contextUsage = useMemo(resolveContextUsage(messages, contextWindow))` and pass
   `contextUsage` + `usageEnabled` to `ChatComposer`; in `chat-composer.tsx` render
   `<ContextMeter>` in the left toolbar cluster when `usageEnabled && contextUsage` (depends
   T013, T009).
-- [ ] T015 [US1] Component test (extend `chat-composer.test.tsx`): meter shows when
+- [x] T015 [US1] Component test (extend `chat-composer.test.tsx`): meter shows when
   `usageEnabled` + usage present; hidden when `usageEnabled=false` or usage unknown.
 
 **Checkpoint**: US1 fully functional & independently demoable (MVP).
@@ -107,21 +107,24 @@ occupancy. Independently valuable/testable.
 
 ### Tests first
 
-- [ ] T016 [P] [FND] Test in `frontend/src/hooks/chat/__tests__/` (the send-path test): the
-  outbound request `messages` contains ONLY the current user turn (both the normal send and
-  the queue-drain path); update any existing assertion that expected full history.
+- [x] T016 [P] [FND] Test `frontend/src/hooks/chat/__tests__/use-chat.request.test.ts`: the
+  outbound request `query` is ONLY the current user turn (both the normal send and the
+  queue-drain path), attachments ride the current turn, `conversationId` is carried; update
+  the stale `use-chat.cancel` full-history assertion.
 
 ### Implementation
 
-- [ ] T017 [FND] Thin request: change both history builders in
-  `frontend/src/hooks/chat/use-chat.ts` (send ~L548-567 and queue-drain ~L329-341) to send
-  `[{ role:"user", content, ...(attachments?{attachments}:{}) }]` only; keep `conversationId`
-  + `agentId`. Local `ChatSession.messages` (display) untouched (makes T016 pass).
-- [ ] T018 [FND] Update `ChatRequestSchema` + `ChatRequestMessageSchema` doc comments
-  (`frontend/src/entities/transport.ts`) to the thin-request contract (current turn only;
-  backend owns Checkpoint + History by `conversationId`).
-- [ ] T019 [P] [FND] Write ADR `docs/design-docs/request-context-ownership.md`: Context,
-  Decision (thin request + two-layer History/Checkpoint), Alternatives, Consequences.
+- [x] T017 [FND] Thin request: change both send-path builders in
+  `frontend/src/hooks/chat/use-chat.ts` to dispatch `beginGeneration(id, query, attachments)`
+  → thin `{ query, ...(attachments.length?{attachments}:{}), conversationId, agentId }`;
+  removed dead `flattenText`/`ChatRequestMessage`. Local `ChatSession.messages` untouched.
+- [x] T018 [FND] Reshape `ChatRequestSchema` (`frontend/src/entities/transport.ts`):
+  `messages: ChatRequestMessage[]` → `query: string` + optional `attachments`; drop
+  `ChatRequestMessageSchema`. Doc comment states the thin-request contract (backend owns
+  Checkpoint + History by `conversationId`).
+- [x] T019 [P] [FND] Write ADR `docs/design-docs/request-context-ownership.md`: Context,
+  Decision (thin request + `query` rename + two-layer History/Checkpoint), Alternatives,
+  Consequences.
 
 **Checkpoint**: continuation still works (backend Checkpoint); payloads shrink; meter honest.
 

@@ -242,8 +242,11 @@ itself does not assume one or the other.
   (and `agentId` when set) — it MUST NOT send the full message-history array. Both send-path
   builders (the normal send and the queue-drain path) MUST be updated.
 - **FR-020**: The `ChatRequest` schema and the API docs (api-docs + backend-integration) MUST
-  be updated to describe the new contract: current turn + `conversationId`, with the backend
-  owning the accumulated context (Checkpoint) and the durable transcript (History table).
+  be updated to describe the new contract. The request shape is renamed from a
+  `messages: ChatRequestMessage[]` history array to a single **`query: string`** (the current
+  turn) plus an optional sibling `attachments`, `conversationId`, and `agentId` — the backend
+  owns the accumulated context (Checkpoint) and the durable transcript (History table). See
+  ADR [`request-context-ownership.md`](../../../docs/design-docs/request-context-ownership.md).
 - **FR-021**: The UI MUST continue to render the full conversation from its local/History
   state for display; the thin request changes only what is *sent*, never what is *shown*. No
   local message is dropped or merged.

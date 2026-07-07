@@ -100,7 +100,7 @@ describe("useChat — cancel a generation (US2)", () => {
     expect(promoted?.status).toBe("complete");
   });
 
-  it("dispatched history for a queued turn excludes later still-queued turns (T071 leak fix)", () => {
+  it("dispatched request for a queued turn is thin — only that turn (004 thin request)", () => {
     const inputs: ChatRequest[] = [];
     const state = { handlers: null as ChatStreamHandlers | null };
     const transport: ChatTransport = {
@@ -118,17 +118,16 @@ describe("useChat — cancel a generation (US2)", () => {
     act(() => result.current.send("A"));
     act(() => result.current.send("B"));
 
-    // First generation closes → "A" dispatches. Its history is [first, reply-1, A] —
-    // "B" (still queued) must NOT leak into it.
+    // First generation closes → "A" dispatches. Thin request: the payload carries ONLY
+    // "A" (the backend owns the Checkpoint by conversationId) — no "first"/"reply-1"
+    // history, and "B" (still queued) must NOT leak into it either.
     act(() => {
       state.handlers!.onEvent({ type: "done" });
       state.handlers!.onClose?.("done");
     });
 
     expect(inputs).toHaveLength(2);
-    const dispatchA = inputs[1].messages;
-    expect(dispatchA.map((m) => m.content)).toEqual(["first", "reply-1", "A"]);
-    expect(dispatchA.some((m) => m.content === "B")).toBe(false);
+    expect(inputs[1].query).toBe("A");
   });
 
   it("a message queued behind the cancelled one is not dropped — it dispatches next", () => {

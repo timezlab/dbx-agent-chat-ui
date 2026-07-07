@@ -82,10 +82,12 @@ component forwards `className` via trailing `cn(...)` and uses CSS-variable toke
 1. **`src/entities/message.ts`** — `MessageMetricsSchema`: add
    `contextWindow: z.number().optional()` (backend-reported context limit for this turn).
 2. **`src/entities/transport.ts`** — `usage` variant of `ChatStreamEventSchema`: add
-   `contextWindow: z.number().optional()`. Also update `ChatRequestSchema.messages` doc comment
-   from "full history" → "current turn only; backend owns accumulated context by
-   `conversationId`" (behavior change lives in use-chat; schema stays `z.array` to allow the
-   single-element send and remain backward-tolerant).
+   `contextWindow: z.number().optional()`. Also **reshape `ChatRequestSchema`** (decision
+   updated during implementation): replace `messages: ChatRequestMessage[]` with
+   `query: string` (current turn) + optional sibling `attachments`, keeping `agentId` /
+   `conversationId`; drop the now-unused `ChatRequestMessageSchema`. Backend owns accumulated
+   context by `conversationId`. See ADR
+   [`request-context-ownership.md`](../../../docs/design-docs/request-context-ownership.md).
 3. **`src/lib/chat/responses.ts`** — `extractUsage`: map `usage.context_window` (and
    `max_tokens` as an alias) → `contextWindow`.
 4. **`src/lib/chat/reducer.ts`** — `mergeMetrics`: fold `contextWindow` (enumerated like the
@@ -153,13 +155,13 @@ component forwards `className` via trailing `cn(...)` and uses CSS-variable toke
 
 ### Thin request (foundational, FR-019..021)
 
-13. **`src/hooks/chat/use-chat.ts`** — both history builders:
-    - send path (~L548-567) and queue-drain (~L329-341): replace
-      `[...snapshot.messages.map(...), {current turn}]` with **just the current turn**
-      `[{ role: "user", content, ...(attachments ? {attachments} : {}) }]`.
-    - `conversationId` + `agentId` already ride `beginGeneration`; no other change.
-    - Local `ChatSession.messages` (display) is untouched — only the outbound `history` array
-      shrinks (FR-021).
+13. **`src/hooks/chat/use-chat.ts`** — both send-path builders:
+    - send path and queue-drain: drop the `[...snapshot.messages.map(...), {current turn}]`
+      history array entirely; `beginGeneration(assistantId, query, attachments)` now posts a
+      thin `{ query, ...(attachments.length ? {attachments} : {}), conversationId, agentId }`.
+    - Remove the now-dead `flattenText` helper and `ChatRequestMessage` import.
+    - Local `ChatSession.messages` (display) is untouched — only the outbound payload
+      shrinks to one turn (FR-021).
 
 ### Docs & ADR (Docs-as-Code)
 
@@ -190,7 +192,7 @@ component forwards `className` via trailing `cn(...)` and uses CSS-variable toke
 | `ContextMeter` | `components/chat/__tests__/context-meter.test.tsx` | renders `x / y · z%`, level class, null on unknown |
 | `matchCommands` + registry | `lib/chat/__tests__/slash-commands.test.ts` | prefix filter; `/compact` disabled when empty |
 | `SlashCommandMenu` + composer keys | `components/chat/__tests__/chat-composer.test.tsx` | `/` opens menu, Arrow/Enter/Tab/Esc, select submits `/compact`, ordinary text still sends |
-| Thin request body | `hooks/chat/__tests__/use-chat.*.test.ts` | outbound `messages` = only current turn (+ queue-drain path) |
+| Thin request body | `hooks/chat/__tests__/use-chat.request.test.ts` | outbound `query` = only current turn, no history (+ queue-drain path); attachments ride the current turn |
 
 Also update any existing use-chat test that asserts full-history in the request body.
 

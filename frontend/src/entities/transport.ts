@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import { AttachmentSchema } from "./attachment";
-import { MessageRoleSchema } from "./message";
 
 /**
  * Data model cho transport (neutral, backend-agnostic — contracts/chat-transport.md).
@@ -10,22 +9,19 @@ import { MessageRoleSchema } from "./message";
  * Adapter thật MAP frame vendor (Databricks Responses) → `ChatStreamEvent` (D3).
  */
 
-/** 1 lượt trong history gửi lên backend (assistant text đã flatten từ parts). */
-export const ChatRequestMessageSchema = z.object({
-  role: MessageRoleSchema,
-  content: z.string(),
-  // Chỉ có mặt trên lượt ĐANG gửi (T071) — history cũ replay lại KHÔNG kèm attachments,
-  // tránh payload phình theo cấp số nhân mỗi lượt (xem databricks-research.md, giới hạn
-  // 16 MB/request của Model Serving).
-  attachments: z.array(AttachmentSchema).optional(),
-});
-export type ChatRequestMessage = z.infer<typeof ChatRequestMessageSchema>;
-
-/** Request 1 lần generate. */
+/**
+ * Request 1 lần generate — THIN REQUEST (004): chỉ mang lượt user HIỆN TẠI (`query`),
+ * KHÔNG gửi lại lịch sử. Backend sở hữu Checkpoint tích luỹ theo `conversationId`; gửi
+ * lại history sẽ tái phồng context và vô hiệu hoá /compact. Lịch sử hiển thị/reload nằm ở
+ * bảng Databricks (đọc qua History API), tách khỏi Checkpoint. Xem ADR
+ * `request-context-ownership.md`.
+ */
 export const ChatRequestSchema = z.object({
-  messages: z.array(ChatRequestMessageSchema), // full history cũ → mới
+  query: z.string(), // nội dung lượt user hiện tại (thin request)
+  // File đính kèm CỦA LƯỢT NÀY (T071). Optional; tránh payload phình — không kèm history.
+  attachments: z.array(AttachmentSchema).optional(),
   agentId: z.string().optional(), // chỉ khi có agents API + đã chọn
-  conversationId: z.string().optional(), // cho backend correlate theo hội thoại
+  conversationId: z.string().optional(), // khoá Checkpoint + correlate hội thoại ở backend
 });
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;
 
