@@ -335,3 +335,40 @@ delays return to defaults.
 - The existing client-side file-reading approach used by the upload/attachment feature.
 - The build pipeline (embed and manual builds) into which recording generation/inlining is
   wired.
+
+---
+
+## Extension — 2026-07-14: Real question, download, right-side toolbar (US5)
+
+Follow-up to the original US1–US4. Motivated by replay showing `Replay: <fileName>` instead of
+the user's actual question, and by the need to capture live turns as replayable recordings.
+
+- **FR-027**: A recording MAY embed the originating user question as a leading sentinel frame
+  `data: {"type":"replay.user_request","text":"…"}`. The SSE→event parser MUST ignore this
+  type (no rendered event); it is metadata only.
+- **FR-028**: When a recording embeds a `replay.user_request`, replay MUST show that text as the
+  user turn instead of the filename placeholder (FR-011). Recordings without it keep the
+  filename fallback (backward compatible).
+- **FR-029**: Starting a replay MUST animate the embedded question into the composer input with a
+  character-by-character typing effect (paced by the replay text delay) BEFORE committing the
+  user turn and streaming the assistant reply. Pause/abort MUST also suspend/cancel the typing.
+- **FR-030**: While Replay mode is on, the composer/input region MUST remain visible (not
+  swapped). It is read-only during replay (it hosts the typing effect). The Replay transport
+  controls MUST render as a sticky toolbar on the right edge of the chat surface, not in the
+  input position (supersedes the original FR-002 swap for this feature).
+- **FR-031**: A completed live assistant turn MUST offer a per-turn "Download .txt" action that
+  serializes that turn to a replayable recording: a leading `replay.user_request` frame (the
+  turn's question) followed by the captured raw SSE frames. The downloaded file MUST replay
+  through the same path and show the original question (FR-028). Reloaded-from-history and
+  replayed turns (no captured frames) MUST NOT show the action.
+- **FR-032**: Frame capture MUST be client-only and MUST NOT alter the transport contract beyond
+  an optional raw-frame callback; captured frames are ephemeral (never persisted to history).
+- **FR-033**: The right-side Replay toolbar MUST default to a collapsed icon rail (play/pause,
+  restart, settings) so it barely covers the transcript, and expand to the full settings panel
+  (source, timing, speed) only when the user opens it.
+- **FR-034**: The Replay toolbar MUST offer a **restart** action that clears the replayed
+  conversation to a fresh, empty chat screen while STAYING in Replay mode with the current
+  source selected, so the same recording can be replayed again. Distinct from "reset timing".
+- **FR-027a**: The `replay.user_request` sentinel MUST NOT be stored in the raw
+  `sse-recordings/*.txt` captures; the generation script injects it into the bundled/generated
+  recording so the raw capture stays a pure Responses stream.

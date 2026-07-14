@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   TEXT_DELAY_MS,
   TOOL_DELAY_MS,
+  USER_REQUEST_FRAME_TYPE,
   delayFor,
+  extractUserRequest,
   parseFrames,
+  serializeRecording,
 } from "@/lib/chat/recording";
 
 describe("parseFrames", () => {
@@ -57,5 +60,77 @@ describe("delayFor", () => {
   it("uses the built-in defaults 20 / 400 ms (parity with the mock)", () => {
     expect(TEXT_DELAY_MS).toBe(20);
     expect(TOOL_DELAY_MS).toBe(400);
+  });
+});
+
+describe("extractUserRequest", () => {
+  it("returns the text of a leading replay.user_request sentinel frame", () => {
+    const rec =
+      `data: {"type":"${USER_REQUEST_FRAME_TYPE}","text":"What is the YTD report?"}\n\n` +
+      'data: {"type":"response.output_text.delta","delta":"Hi"}\n\n';
+    expect(extractUserRequest(rec)).toBe("What is the YTD report?");
+  });
+
+  it("finds the sentinel even when it is not the first frame", () => {
+    const rec =
+      'data: {"type":"response.output_text.delta","delta":"Hi"}\n\n' +
+      `data: {"type":"${USER_REQUEST_FRAME_TYPE}","text":"second"}\n\n`;
+    expect(extractUserRequest(rec)).toBe("second");
+  });
+
+  it("returns null when there is no sentinel", () => {
+    expect(
+      extractUserRequest('data: {"type":"response.output_text.delta","delta":"Hi"}\n\n'),
+    ).toBeNull();
+    expect(extractUserRequest("")).toBeNull();
+  });
+
+  it("ignores a sentinel with a non-string / empty text", () => {
+    expect(
+      extractUserRequest(`data: {"type":"${USER_REQUEST_FRAME_TYPE}","text":42}\n\n`),
+    ).toBeNull();
+    expect(
+      extractUserRequest(`data: {"type":"${USER_REQUEST_FRAME_TYPE}","text":""}\n\n`),
+    ).toBeNull();
+  });
+
+  it("skips malformed frames without throwing", () => {
+    const rec =
+      "data: not-json\n\n" +
+      `data: {"type":"${USER_REQUEST_FRAME_TYPE}","text":"ok"}\n\n`;
+    expect(extractUserRequest(rec)).toBe("ok");
+  });
+});
+
+describe("serializeRecording", () => {
+  it("prepends a replay.user_request sentinel then each captured frame as an SSE block", () => {
+    const out = serializeRecording("my question", [
+      '{"type":"response.output_text.delta","delta":"A"}',
+      '{"type":"response.output_text.delta","delta":"B"}',
+    ]);
+    expect(out).toBe(
+      `data: {"type":"${USER_REQUEST_FRAME_TYPE}","text":"my question"}\n\n` +
+        'data: {"type":"response.output_text.delta","delta":"A"}\n\n' +
+        'data: {"type":"response.output_text.delta","delta":"B"}\n\n',
+    );
+  });
+
+  it("escapes the question so the sentinel stays valid JSON", () => {
+    const out = serializeRecording('he said "hi"\nbye', []);
+    const first = parseFrames(out)[0];
+    expect(JSON.parse(first)).toEqual({
+      type: USER_REQUEST_FRAME_TYPE,
+      text: 'he said "hi"\nbye',
+    });
+  });
+
+  it("round-trips through extractUserRequest", () => {
+    const out = serializeRecording("round trip?", ['{"type":"x"}']);
+    expect(extractUserRequest(out)).toBe("round trip?");
+  });
+
+  it("prefixes each line of a multi-line frame with data:", () => {
+    const out = serializeRecording("q", ["line-1\nline-2"]);
+    expect(out).toContain("data: line-1\ndata: line-2\n\n");
   });
 });

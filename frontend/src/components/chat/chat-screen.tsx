@@ -32,6 +32,8 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
     send,
     cancel,
     submitFeedback,
+    recordedIds,
+    downloadRecording,
     agents,
     selectedAgentId,
     selectAgent,
@@ -42,8 +44,10 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
     uploadMaxSizeBytes,
     replayMode,
     replaySession,
+    replayTypingText,
     replayPlay,
     replayPause,
+    replayReset,
     replaySetSource,
     replaySetTiming,
     replayResetTiming,
@@ -65,7 +69,7 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
     <div
       data-slot="chat-screen"
       className={cn(
-        "flex h-full min-h-0 w-full flex-col bg-background text-foreground",
+        "relative flex h-full min-h-0 w-full flex-col bg-background text-foreground",
         className,
       )}
       {...props}
@@ -98,7 +102,7 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
           <ChatEmpty
             samplePrompts={samplePrompts}
             onSelectPrompt={send}
-            disabled={configError != null}
+            disabled={configError != null || replayMode}
             className="my-auto"
           />
         </OverlayScroll>
@@ -108,46 +112,53 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
           onFeedback={submitFeedback}
           firstPlanCallId={firstPlanCallId}
           showMetrics={usageEnabled}
+          recordedIds={recordedIds}
+          onDownloadRecording={downloadRecording}
           className="min-h-0 flex-1"
         />
       )}
 
-      {/* The input region: composer, OR the Replay control while Replay mode is on. Both
-          render in the IDENTICAL wrapper and dock the same TodoCard, so toggling causes
-          no layout shift (FR-002/FR-002a, SC-007). */}
+      {/* The composer stays put in Replay mode (it hosts the typing effect); it is only
+          disabled + fed the "typed" question via overrideText (FR-029/FR-030). */}
       <div className="mx-auto w-full max-w-3xl px-4 pb-4">
-        {replayMode ? (
+        <ChatComposer
+          onSend={send}
+          onCancel={cancel}
+          todos={todos}
+          busy={status === "streaming"}
+          disabled={configError != null || replayMode}
+          overrideText={replayMode ? replayTypingText : null}
+          agents={agents}
+          selectedAgentId={selectedAgentId}
+          onSelectAgent={selectAgent}
+          agentsAvailable={agentsAvailable}
+          uploadEnabled={uploadEnabled}
+          uploadAccept={uploadAccept}
+          uploadMaxSizeBytes={uploadMaxSizeBytes}
+          usageEnabled={usageEnabled}
+          contextUsage={contextUsage}
+          messageCount={messages.length}
+        />
+      </div>
+
+      {/* Replay transport controls: a sticky panel on the right edge of the chat surface
+          while Replay mode is on (FR-030). Anchored to the relative chat-screen root. */}
+      {replayMode ? (
+        <div className="pointer-events-none absolute inset-y-0 right-0 z-20 hidden items-center pr-4 md:flex">
           <ReplayControl
+            className="pointer-events-auto"
             session={replaySession}
-            todos={todos}
             onPlay={replayPlay}
             onPause={replayPause}
+            onReset={replayReset}
             onSetSource={replaySetSource}
             onSetTiming={replaySetTiming}
             onResetTiming={replayResetTiming}
             onSetSpeed={replaySetSpeed}
             maxUploadBytes={uploadMaxSizeBytes}
           />
-        ) : (
-          <ChatComposer
-            onSend={send}
-            onCancel={cancel}
-            todos={todos}
-            busy={status === "streaming"}
-            disabled={configError != null}
-            agents={agents}
-            selectedAgentId={selectedAgentId}
-            onSelectAgent={selectAgent}
-            agentsAvailable={agentsAvailable}
-            uploadEnabled={uploadEnabled}
-            uploadAccept={uploadAccept}
-            uploadMaxSizeBytes={uploadMaxSizeBytes}
-            usageEnabled={usageEnabled}
-            contextUsage={contextUsage}
-            messageCount={messages.length}
-          />
-        )}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }

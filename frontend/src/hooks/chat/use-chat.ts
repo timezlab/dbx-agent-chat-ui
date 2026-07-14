@@ -14,6 +14,7 @@ import { toChatSession } from "@/entities";
 import { resolveConfig, isChatEndpointMissing } from "@/lib/config";
 import { dequeue, enqueue, isBlank } from "@/lib/chat/queue";
 import { reduceStreamEvent } from "@/lib/chat/reducer";
+import { serializeRecording } from "@/lib/chat/recording";
 import { createChatTransport, type ChatTransport } from "@/lib/chat/transport";
 import { HistoryApiService } from "@/lib/api/history";
 import { FeedbackApiService } from "@/lib/api/feedback";
@@ -84,6 +85,13 @@ export interface UseChatResult {
   selectConversation: (id: string) => void;
   /** Submit feedback for a reply; optimistically reflects the selection (US3). */
   submitFeedback: (feedback: Feedback) => Promise<void>;
+  /**
+   * Ids of assistant turns whose live SSE stream was captured this session and can be
+   * downloaded as a replayable `.txt` (US5 / FR-031). Reloaded/replayed turns are absent.
+   */
+  recordedIds: Set<string>;
+  /** Download a captured assistant turn as a replayable recording (embeds the question). */
+  downloadRecording: (assistantId: string) => void;
 
   // --- Dev-tools Replay (feature 002) — all ephemeral, never persisted (FR-020) ---
   /** Whether Replay mode is on (composer swapped for the Replay control, FR-002). */
@@ -92,10 +100,14 @@ export interface UseChatResult {
   toggleReplayMode: () => void;
   /** The current replay playback state. */
   replaySession: ReplaySession;
+  /** Question being typed into the composer during the replay typing effect; null when idle. */
+  replayTypingText: string | null;
   /** Start playback from the beginning, or resume when paused; no-op without a source. */
   replayPlay: () => void;
   /** Suspend playback at the current frame (no terminal, FR-010). */
   replayPause: () => void;
+  /** Clear the replayed conversation (fresh chat screen) while staying in Replay mode. */
+  replayReset: () => void;
   /** Select the recording source (default or a client-read upload). */
   replaySetSource: (source: ReplaySource) => void;
   /** Edit the base per-frame delays (clamped to a safe range, FR-016). */
@@ -236,6 +248,15 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
   });
 
   const controllerRef = useRef<AbortController | null>(null);
+
+  // Live-turn capture (US5): raw SSE frames + the originating question, keyed by assistant id,
+  // so a completed turn can be downloaded as a replayable recording. Ephemeral (never
+  // persisted); `recordedIds` mirrors which turns finished with captured frames so the UI can
+  // show the download action. Both are cleared when leaving the conversation.
+  const recordingsRef = useRef<Map<string, { query: string; frames: string[] }>>(
+    new Map(),
+  );
+  const [recordedIds, setRecordedIds] = useState<Set<string>>(new Set());
   // Aborting the active controller fires `onClose("abort")` SYNCHRONOUSLY (see streamSSE),
   // which routes through `handleClose` and drains the queue. That is what we want for
   // `cancel()` (the queued turn dispatches next), but NOT when we abort as part of LEAVING
@@ -339,6 +360,9 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
 
   const beginGeneration = useCallback(
     (assistantId: string, query: string, attachments: Attachment[]) => {
+      // Start capturing this turn's raw SSE frames so it can be downloaded as a replayable
+      // recording (US5); the question is stored now so `serializeRecording` can embed it.
+      recordingsRef.current.set(assistantId, { query, frames: [] });
       try {
         controllerRef.current = transport.send(
           {
@@ -358,7 +382,20 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
               }
               setConversation((prev) => reduceStreamEvent(prev, event));
             },
-            onClose: (reason) => handleClose(assistantId, reason),
+            onRawFrame: (data) => {
+              recordingsRef.current.get(assistantId)?.frames.push(data);
+            },
+            onClose: (reason) => {
+              handleClose(assistantId, reason);
+              // Offer the download only once the turn actually captured frames.
+              if ((recordingsRef.current.get(assistantId)?.frames.length ?? 0) > 0) {
+                setRecordedIds((prev) => {
+                  const next = new Set(prev);
+                  next.add(assistantId);
+                  return next;
+                });
+              }
+            },
           },
         );
       } catch (err) {
@@ -444,6 +481,9 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
     // Cancel any in-flight restore so its late turns can't land on the new blank session.
     activeLoadRef.current = null;
     setLoadingConversation(false);
+    // Captured recordings belong to the conversation being left.
+    recordingsRef.current.clear();
+    setRecordedIds(new Set());
     setConversation({
       id,
       messages: [],
@@ -464,6 +504,9 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
       // Publish the pointer eagerly so a reload re-opens this one even if the fetch is
       // still in flight; the backend is the source of the turns.
       setConversationId(id);
+      // Captured recordings belong to the conversation being left.
+      recordingsRef.current.clear();
+      setRecordedIds(new Set());
       // Switch immediately: swap in a blank target session (id set now, so the sidebar
       // highlight and any reload point here at once) and show the skeleton — don't keep the
       // previous conversation's turns on screen while the fetch is in flight. `activeLoadRef`
@@ -507,6 +550,25 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
       return submitFeedbackFn(feedback);
     },
     [submitFeedbackFn],
+  );
+
+  const downloadRecording = useCallback(
+    (assistantId: string) => {
+      const rec = recordingsRef.current.get(assistantId);
+      if (!rec || rec.frames.length === 0) return;
+      if (typeof document === "undefined") return; // SSR/static-export guard
+      const text = serializeRecording(rec.query, rec.frames);
+      const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `replay-${now()}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    },
+    [now],
   );
 
   const send = useCallback(
@@ -580,6 +642,8 @@ export function useChat(options: UseChatOptions = {}): UseChatResult {
     newConversation,
     selectConversation,
     submitFeedback,
+    recordedIds,
+    downloadRecording,
     // Replay public API (replayMode, replaySession, replayPlay/Pause/SetSource/…).
     ...replay,
   };

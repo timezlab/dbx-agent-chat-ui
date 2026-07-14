@@ -7,7 +7,11 @@ import { toast } from "react-toastify";
 import type { Attachment, ChatSession, Message } from "@/entities";
 import { reduceStreamEvent } from "@/lib/chat/reducer";
 import { streamReplay, type ReplayHandle } from "@/lib/chat/replay";
-import { TEXT_DELAY_MS, TOOL_DELAY_MS } from "@/lib/chat/recording";
+import {
+  TEXT_DELAY_MS,
+  TOOL_DELAY_MS,
+  extractUserRequest,
+} from "@/lib/chat/recording";
 import { DEFAULT_REPLAY_RECORDING } from "@/lib/chat/recordings/default-recording.generated";
 
 /**
@@ -73,12 +77,23 @@ export interface UseReplayResult {
   replayMode: boolean;
   /** The current replay playback state. */
   replaySession: ReplaySession;
+  /**
+   * The question being "typed" into the composer during the pre-stream typing effect
+   * (FR-029), or `null` when no typing is in progress. The composer renders this read-only
+   * while non-null; it clears the instant the user turn is committed.
+   */
+  replayTypingText: string | null;
   /** Toggle Replay mode; resets to a fresh, non-persisted conversation (D-R4). */
   toggleReplayMode: () => void;
   /** Start playback from the beginning, or resume when paused; no-op without a source. */
   replayPlay: () => void;
   /** Suspend playback at the current frame (no terminal, FR-010). */
   replayPause: () => void;
+  /**
+   * Clear the replayed conversation — a fresh, empty chat screen — while STAYING in Replay
+   * mode with the current source selected, so the same recording can be replayed again.
+   */
+  replayReset: () => void;
   /** Select the recording source (default or a client-read upload). */
   replaySetSource: (source: ReplaySource) => void;
   /** Edit the base per-frame delays (clamped to a safe range, FR-016). */
@@ -118,12 +133,40 @@ export function useReplay(deps: UseReplayDeps): UseReplayResult {
   const replayHandleRef = useRef<ReplayHandle | null>(null);
   const replayRecordingRef = useRef<string>(DEFAULT_REPLAY_RECORDING);
 
+  // Latest session read imperatively by the async typing→stream handoff, so timing/speed
+  // edits made while a question is still typing apply when the stream actually starts.
+  const replaySessionRef = useRef(replaySession);
+  useEffect(() => {
+    replaySessionRef.current = replaySession;
+  });
+
+  // Pre-stream typing effect (FR-029): the embedded question is "typed" into the composer
+  // char-by-char before the user turn is committed. Null ⇒ no typing in flight.
+  const [replayTypingText, setReplayTypingText] = useState<string | null>(null);
+  const typingRef = useRef<{
+    question: string;
+    index: number;
+    perCharDelayMs: number;
+    paused: boolean;
+    aborted: boolean;
+    timer: ReturnType<typeof setTimeout> | null;
+    onDone: () => void;
+  } | null>(null);
+
+  const cancelTyping = useCallback(() => {
+    const t = typingRef.current;
+    if (t?.timer != null) clearTimeout(t.timer);
+    typingRef.current = null;
+    setReplayTypingText(null);
+  }, []);
+
   const toggleReplayMode = useCallback(() => {
     // Abort whatever is streaming (live or replay) and reset to a fresh in-memory
     // conversation. Recording stays suppressed (replayModeRef), so nothing resurrects.
     abortActiveGeneration();
     replayHandleRef.current?.abort();
     replayHandleRef.current = null;
+    cancelTyping();
 
     const next = !replayModeRef.current;
     replayModeRef.current = next; // sync so the settle guard reads the new value
@@ -137,7 +180,7 @@ export function useReplay(deps: UseReplayDeps): UseReplayResult {
       queue: [],
       status: "idle",
     });
-  }, [abortActiveGeneration, generateId, setConversation]);
+  }, [abortActiveGeneration, generateId, setConversation, cancelTyping]);
 
   const replaySetSource = useCallback((source: ReplaySource) => {
     if (source.kind === "default") {
@@ -193,19 +236,103 @@ export function useReplay(deps: UseReplayDeps): UseReplayResult {
     setReplaySession((s) => ({ ...s, speed }));
   }, []);
 
+  // Commit the user turn (`userText`) + a streaming assistant turn, then drive the recording
+  // through the SAME reducer/terminal path as live streaming (FR-011/FR-012). Reads timing
+  // from the ref so edits made mid-typing take effect when the stream actually starts.
+  const commitAndStream = useCallback(
+    (userText: string) => {
+      typingRef.current = null;
+      setReplayTypingText(null);
+
+      const recording = replayRecordingRef.current;
+      replayHandleRef.current?.abort();
+      const user = makeUser(userText);
+      const assistant = makeAssistant();
+      const assistantId = assistant.id;
+      setConversation((prev) => ({
+        ...prev,
+        messages: [...prev.messages, user, assistant],
+        activeId: assistantId,
+        status: "streaming",
+      }));
+
+      const session = replaySessionRef.current;
+      const handle = streamReplay({
+        recording,
+        timing: {
+          textDelayMs: session.textDelayMs,
+          toolDelayMs: session.toolDelayMs,
+          speed: session.speed,
+        },
+        handlers: {
+          onEvent: (event) => {
+            // Same detailed error toast + reducer path as live streaming.
+            if (event.type === "error") {
+              toast.error(event.message, { autoClose: false });
+            }
+            setConversation((prev) => reduceStreamEvent(prev, event));
+          },
+          onClose: (reason) => {
+            handleClose(assistantId, reason);
+            replayHandleRef.current = null;
+            setReplaySession((s) => ({ ...s, status: "idle" }));
+          },
+        },
+      });
+      replayHandleRef.current = handle;
+      setReplaySession((s) => ({ ...s, status: "playing", error: null }));
+    },
+    [makeUser, makeAssistant, handleClose, setConversation],
+  );
+
+  // One character of the pre-stream typing effect. Pauses/aborts are honored between chars;
+  // reaching the end hands off to `onDone` (which commits the user turn + starts the stream).
+  const stepTyping = useCallback(function step() {
+    const t = typingRef.current;
+    if (!t || t.aborted || t.paused) return;
+    t.index += 1;
+    setReplayTypingText(t.question.slice(0, t.index));
+    if (t.index >= t.question.length) {
+      t.timer = null;
+      t.onDone();
+      return;
+    }
+    t.timer = setTimeout(step, t.perCharDelayMs);
+  }, []);
+
   const replayPause = useCallback(() => {
-    replayHandleRef.current?.pause();
+    // Pausing mid-typing freezes the typing effect; otherwise it pauses the frame stream.
+    const t = typingRef.current;
+    if (t && !t.aborted) {
+      t.paused = true;
+      if (t.timer != null) {
+        clearTimeout(t.timer);
+        t.timer = null;
+      }
+    } else {
+      replayHandleRef.current?.pause();
+    }
     setReplaySession((s) =>
       s.status === "playing" ? { ...s, status: "paused" } : s,
     );
   }, []);
 
   const replayPlay = useCallback(() => {
-    // Resume a paused playback in place (no re-render of shown frames, FR-010).
-    if (replaySession.status === "paused" && replayHandleRef.current) {
-      replayHandleRef.current.resume();
-      setReplaySession((s) => ({ ...s, status: "playing" }));
-      return;
+    // Resume a paused playback in place — either the typing effect or the frame stream
+    // (no re-render of shown frames, FR-010).
+    if (replaySession.status === "paused") {
+      const t = typingRef.current;
+      if (t && !t.aborted) {
+        t.paused = false;
+        setReplaySession((s) => ({ ...s, status: "playing" }));
+        stepTyping();
+        return;
+      }
+      if (replayHandleRef.current) {
+        replayHandleRef.current.resume();
+        setReplaySession((s) => ({ ...s, status: "playing" }));
+        return;
+      }
     }
     if (replaySession.status === "playing") return; // already running
 
@@ -215,58 +342,70 @@ export function useReplay(deps: UseReplayDeps): UseReplayResult {
       return;
     }
 
-    // Abort any prior handle, then create the labelled placeholder user turn + a
-    // streaming assistant turn (FR-011).
+    // Abort any prior handle/typing before starting a new playback.
     replayHandleRef.current?.abort();
+    cancelTyping();
+
+    // Prefer the question embedded in the recording (FR-028); fall back to the filename
+    // placeholder for legacy recordings without a sentinel (FR-011).
+    const question = extractUserRequest(recording);
+    if (question) {
+      // Type the question into the composer first (FR-029), then commit + stream.
+      const perCharDelayMs =
+        clampReplayDelay(replaySession.textDelayMs) /
+        Math.max(replaySession.speed, 0.1);
+      typingRef.current = {
+        question,
+        index: 0,
+        perCharDelayMs,
+        paused: false,
+        aborted: false,
+        timer: null,
+        onDone: () => commitAndStream(question),
+      };
+      setReplayTypingText("");
+      setReplaySession((s) => ({ ...s, status: "playing", error: null }));
+      stepTyping();
+      return;
+    }
+
     const label =
       replaySession.source === "upload"
         ? `Replay: ${replaySession.fileName ?? "uploaded recording"}`
         : "Replay: default recording";
-    const user = makeUser(label);
-    const assistant = makeAssistant();
-    const assistantId = assistant.id;
-    setConversation((prev) => ({
-      ...prev,
-      messages: [...prev.messages, user, assistant],
-      activeId: assistantId,
-      status: "streaming",
-    }));
+    commitAndStream(label);
+  }, [replaySession, cancelTyping, commitAndStream, stepTyping]);
 
-    const handle = streamReplay({
-      recording,
-      timing: {
-        textDelayMs: replaySession.textDelayMs,
-        toolDelayMs: replaySession.toolDelayMs,
-        speed: replaySession.speed,
-      },
-      handlers: {
-        onEvent: (event) => {
-          // Same detailed error toast + reducer path as live streaming.
-          if (event.type === "error") {
-            toast.error(event.message, { autoClose: false });
-          }
-          setConversation((prev) => reduceStreamEvent(prev, event));
-        },
-        onClose: (reason) => {
-          handleClose(assistantId, reason);
-          replayHandleRef.current = null;
-          setReplaySession((s) => ({ ...s, status: "idle" }));
-        },
-      },
+  const replayReset = useCallback(() => {
+    // Stop any playback/typing and wipe the transcript, but stay in Replay mode with the
+    // current source — a "new chat" for replay.
+    replayHandleRef.current?.abort();
+    replayHandleRef.current = null;
+    cancelTyping();
+    setReplaySession((s) => ({ ...s, status: "idle", error: null }));
+    setConversation({
+      id: generateId(),
+      messages: [],
+      activeId: null,
+      queue: [],
+      status: "idle",
     });
-    replayHandleRef.current = handle;
-    setReplaySession((s) => ({ ...s, status: "playing", error: null }));
-  }, [replaySession, makeUser, makeAssistant, handleClose, setConversation]);
+  }, [cancelTyping, generateId, setConversation]);
 
   const isReplayActive = useCallback(() => replayModeRef.current, []);
-  const abortReplay = useCallback(() => replayHandleRef.current?.abort(), []);
+  const abortReplay = useCallback(() => {
+    cancelTyping();
+    replayHandleRef.current?.abort();
+  }, [cancelTyping]);
 
   return {
     replayMode,
     replaySession,
+    replayTypingText,
     toggleReplayMode,
     replayPlay,
     replayPause,
+    replayReset,
     replaySetSource,
     replaySetTiming,
     replayResetTiming,

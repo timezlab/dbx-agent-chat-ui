@@ -205,3 +205,21 @@ US1 (MVP) → add US2 (pause/resume) → add US3 (upload source) → add US4 (de
 - TDD is enforced (Principle VI): verify each test fails for the expected reason before writing production code.
 - Never persist replay turns; never emit base64 to stdout from scripts.
 - Commit after each task or logical group; one logical change per commit.
+
+---
+
+## Extension — 2026-07-14: US5 (real question · download · right toolbar)
+
+Enforce TDD (Principle VI): each test must fail for the expected reason before production code.
+
+- [ ] T040 [US5] `recording.ts`: add `extractUserRequest(recording)` + `serializeRecording(question, frames)` (pure). Tests in `frontend/src/lib/chat/__tests__/recording.test.ts` (FR-027/FR-031).
+- [ ] T041 [US5] `use-replay.ts`: user-turn label = `extractUserRequest(recording) ?? <filename fallback>`; add `replayTypingText` typing sequence (paced by textDelayMs) before committing the user turn; pause/abort suspend/cancel typing (FR-028/FR-029). Tests in `use-chat.replay.test.ts`.
+- [ ] T042 [US5] `chat-composer.tsx`: add `overrideText?: string | null` (read-only display of the typed question) (FR-029/FR-030).
+- [x] T043 [US5] `scripts/gen-replay-recording.mjs`: inject the `replay.user_request` sentinel into the generated recording (raw `default.txt` stays a pure stream); regenerate `default-recording.generated.ts` (FR-027/FR-027a).
+- [ ] T050 [US5] `replay-control.tsx` + `use-replay.ts`: collapsed icon rail by default, expand to settings (FR-033); `replayReset` restart action clears the transcript in place (FR-034).
+- [ ] T044 [US5] `chat-screen.tsx`: keep composer mounted in replay mode (read-only); render `ReplayControl` as a sticky right-edge toolbar (FR-030).
+- [ ] T045 [US5] `replay-control.tsx`: restyle into a compact vertical right-side panel; drop the docked TodoCard (FR-030).
+- [ ] T046 [US5] `transport.ts`: optional `onRawFrame?(data)` on `ChatStreamHandlers`, invoked per frame in `streamSSE.onmessage` (FR-032). Test in `transport.test.ts`.
+- [ ] T047 [US5] `use-chat.ts`: `recordingsRef` capture per assistant turn; expose `downloadRecording(id)` + `recordedIds`; clear on new/select conversation (FR-031/FR-032). Test in `use-chat` tests.
+- [ ] T048 [US5] Download button in `assistant-message.tsx`, threaded via `chat-provider.tsx` + `messages/message-list.tsx`; shown only for turns with a captured recording (FR-031).
+- [ ] T049 [US5] Run quality gates: `pnpm test` + `pnpm lint` + typecheck.

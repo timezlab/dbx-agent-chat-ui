@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ReplaySession } from "@/hooks/chat/use-chat";
@@ -23,6 +23,7 @@ function renderControl(
   const handlers = {
     onPlay: vi.fn(),
     onPause: vi.fn(),
+    onReset: vi.fn(),
     onSetSource: vi.fn(),
     onSetTiming: vi.fn(),
     onResetTiming: vi.fn(),
@@ -35,16 +36,33 @@ function renderControl(
 }
 
 describe("ReplayControl (US1)", () => {
-  it("matches the composer footprint (same card shell) and forwards className", () => {
+  it("renders as a bordered panel and forwards className", () => {
     const { container } = renderControl(idleSession(), {
       className: "custom-marker",
     });
     const root = container.querySelector('[data-slot="replay-control"]');
     expect(root).not.toBeNull();
-    // Same rounded card shell + border as the composer, so toggling causes no shift.
     expect(root?.className).toContain("rounded-2xl");
     expect(root?.className).toContain("border");
     expect(root?.className).toContain("custom-marker");
+  });
+
+  it("is collapsed to an icon rail by default and expands on the settings toggle", () => {
+    const { container } = renderControl();
+    // Collapsed: play + restart + settings, but no timing controls or source select yet.
+    expect(container.querySelector('[data-expanded="false"]')).not.toBeNull();
+    expect(screen.queryByLabelText("Text delay")).toBeNull();
+    expect(screen.getByRole("button", { name: /play replay/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /show replay settings/i }));
+    expect(container.querySelector('[data-expanded="true"]')).not.toBeNull();
+    expect(screen.getByLabelText("Text delay")).toBeInTheDocument();
+  });
+
+  it("clears the chat via the restart control", () => {
+    const { handlers } = renderControl();
+    fireEvent.click(screen.getByRole("button", { name: /restart replay/i }));
+    expect(handlers.onReset).toHaveBeenCalledOnce();
   });
 
   it("shows the default source and enables Play with it", () => {
@@ -59,10 +77,11 @@ describe("ReplayControl (US1)", () => {
     expect(play).toBeDisabled();
   });
 
-  it("docks the agent todo strip above the controls", () => {
-    const { container } = renderControl(idleSession(), {
-      todos: [{ content: "step one", status: "in_progress" }],
-    });
-    expect(container.querySelector('[data-slot="todo-card"]')).not.toBeNull();
+  it("exposes the timing controls once expanded and no longer docks the todo strip (todos live on the composer)", () => {
+    const { container } = renderControl();
+    fireEvent.click(screen.getByRole("button", { name: /show replay settings/i }));
+    expect(screen.getByLabelText("Text delay")).toBeInTheDocument();
+    expect(screen.getByLabelText("Tool delay")).toBeInTheDocument();
+    expect(container.querySelector('[data-slot="todo-card"]')).toBeNull();
   });
 });

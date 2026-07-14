@@ -2,16 +2,18 @@
 
 import * as React from "react";
 import {
+  ChevronRightIcon,
   FileTextIcon,
   MinusIcon,
   PauseIcon,
   PlayIcon,
   PlusIcon,
+  RefreshCwIcon,
   RotateCcwIcon,
+  Settings2Icon,
   UploadIcon,
 } from "lucide-react";
 
-import type { Todo } from "@/entities";
 import type {
   ReplaySession,
   ReplaySource,
@@ -27,7 +29,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { TodoCard } from "./todo-card";
 
 /** Speed presets (D-R3). */
 const SPEEDS: ReplaySpeed[] = [0.5, 1, 2, 4];
@@ -39,12 +40,12 @@ export interface ReplayControlProps
   extends Omit<React.ComponentProps<"div">, "onSelect"> {
   /** Current replay session state (status / source / timing / error). */
   session: ReplaySession;
-  /** The agent's current plan; docked ON the control (parity with the composer). */
-  todos?: Todo[];
   /** Start playback (or resume when paused). */
   onPlay: () => void;
   /** Suspend playback. */
   onPause: () => void;
+  /** Clear the replayed conversation (fresh chat screen), staying in Replay mode. */
+  onReset: () => void;
   /** Choose the recording source (upload text is read here, client-side). */
   onSetSource: (source: ReplaySource) => void;
   /** Edit the base per-frame delays. */
@@ -144,16 +145,18 @@ function Stepper({
 }
 
 /**
- * Replaces the chat composer while Replay mode is on (D-R9). It reuses the composer's
- * outer card shell + docks the same `TodoCard` strip, so the content above the input is
- * unchanged and there is **0px** layout shift on toggle (FR-002a / SC-007). Drives a
- * client-only playback — no network — via the `useChat` replay surface passed as props.
+ * The Replay transport controls, rendered as a **sticky panel on the right edge** of the chat
+ * surface while Replay mode is on (FR-030). It stays **collapsed to an icon rail** by default so
+ * it barely covers the transcript, and expands to the full settings panel only when the user
+ * opens it (FR-033). The composer stays in place (it hosts the typing effect); this panel only
+ * carries play/pause, restart, source, speed, and per-frame timing. Client-only playback — no
+ * network — via the `useChat` replay surface passed as props.
  */
 export function ReplayControl({
   session,
-  todos = [],
   onPlay,
   onPause,
+  onReset,
   onSetSource,
   onSetTiming,
   onResetTiming,
@@ -164,6 +167,8 @@ export function ReplayControl({
 }: ReplayControlProps) {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [uploadError, setUploadError] = React.useState<string | null>(null);
+  // Collapsed (icon rail) by default so it doesn't cover the transcript; expand to edit.
+  const [expanded, setExpanded] = React.useState(false);
 
   const isPlaying = session.status === "playing";
   const isPaused = session.status === "paused";
@@ -211,190 +216,249 @@ export function ReplayControl({
       onSetTiming({ [key]: Number.isFinite(value) ? value : 0 });
     };
 
+  // Shared across the collapsed rail and the expanded header so play state is identical.
+  const playPauseButton = isPlaying ? (
+    <Button
+      type="button"
+      size="icon"
+      variant="secondary"
+      onClick={onPause}
+      data-slot="replay-pause"
+      aria-label="Pause replay"
+      className="h-10 w-10 shrink-0 rounded-full"
+    >
+      <PauseIcon fill="currentColor" />
+    </Button>
+  ) : (
+    <Button
+      type="button"
+      size="icon"
+      onClick={onPlay}
+      disabled={!canPlay}
+      data-slot="replay-play"
+      aria-label="Play replay"
+      className="h-10 w-10 shrink-0 rounded-full"
+    >
+      <PlayIcon fill="currentColor" className="ml-0.5" />
+    </Button>
+  );
+
+  const restartButton = (
+    <Button
+      type="button"
+      size="icon"
+      variant="ghost"
+      onClick={onReset}
+      data-slot="replay-restart"
+      aria-label="Restart replay (clear chat)"
+      title="Restart replay (clear chat)"
+      className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground"
+    >
+      <RefreshCwIcon className="h-4 w-4" />
+    </Button>
+  );
+
+  // Collapsed: a slim vertical icon rail — play/pause, restart, and a settings toggle to
+  // expand. Barely covers the transcript (FR-033).
+  if (!expanded) {
+    return (
+      <div
+        data-slot="replay-control"
+        data-expanded="false"
+        className={cn(
+          "flex w-14 flex-col items-center gap-2 rounded-2xl border border-input bg-background/95 p-2 shadow-lg backdrop-blur supports-backdrop-filter:bg-background/80",
+          className,
+        )}
+        {...props}
+      >
+        {playPauseButton}
+        {restartButton}
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          onClick={() => setExpanded(true)}
+          data-slot="replay-settings"
+          aria-label="Show replay settings"
+          title="Show replay settings"
+          className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground"
+        >
+          <Settings2Icon className="h-4 w-4" />
+        </Button>
+        {error ? (
+          <span
+            role="alert"
+            data-slot="replay-error"
+            aria-label={error}
+            title={error}
+            className="h-2 w-2 shrink-0 rounded-full bg-destructive"
+          />
+        ) : null}
+      </div>
+    );
+  }
+
+  // Expanded: the full settings panel.
   return (
     <div
       data-slot="replay-control"
+      data-expanded="true"
       className={cn(
-        "flex flex-col rounded-2xl border border-input bg-background shadow-sm",
+        "flex w-64 flex-col gap-3 rounded-2xl border border-input bg-background/95 p-3 shadow-lg backdrop-blur supports-backdrop-filter:bg-background/80",
         className,
       )}
       {...props}
     >
-      {todos.length > 0 ? (
-        <TodoCard
-          todos={todos}
-          className="rounded-none rounded-t-2xl border-0 border-b bg-transparent"
-        />
-      ) : null}
+      {/* Header: play/pause + status + collapse */}
+      <div className="flex items-center gap-3">
+        {playPauseButton}
 
-      <div className="flex flex-col gap-4 p-4">
-        {/* Row 1: Top Controls */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            {isPlaying ? (
-              <Button
-                type="button"
-                size="icon"
-                variant="secondary"
-                onClick={onPause}
-                data-slot="replay-pause"
-                aria-label="Pause replay"
-                className="h-10 w-10 rounded-full"
-              >
-                <PauseIcon fill="currentColor" />
-              </Button>
-            ) : (
-              <Button
-                type="button"
-                size="icon"
-                onClick={onPlay}
-                disabled={!canPlay}
-                data-slot="replay-play"
-                aria-label="Play replay"
-                className="h-10 w-10 rounded-full"
-              >
-                <PlayIcon fill="currentColor" className="ml-0.5" />
-              </Button>
-            )}
-
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold">Replay Mode</span>
-              <span className="text-xs font-medium text-muted-foreground">
-                {isPlaying ? "Playing..." : isPaused ? "Paused" : "Ready"}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Select
-              value={session.source}
-              onValueChange={handleSourceChange}
-              disabled={isPlaying || isPaused}
-            >
-              <SelectTrigger id="replay-source" className="h-9 max-w-sm">
-                <FileTextIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <SelectValue placeholder="Select source" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="default">Default recording</SelectItem>
-                <SelectItem value="upload">
-                  {session.fileName ? session.fileName : "Upload .txt…"}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-
-            {session.source === "upload" ? (
-              <Button
-                type="button"
-                size="icon"
-                variant="outline"
-                className="h-9 w-9 shrink-0"
-                disabled={isPlaying || isPaused}
-                onClick={() => fileInputRef.current?.click()}
-                title="Choose file"
-                data-slot="replay-upload"
-              >
-                <UploadIcon className="h-4 w-4" />
-              </Button>
-            ) : null}
-          </div>
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="text-sm font-semibold">Replay Mode</span>
+          <span className="text-xs font-medium text-muted-foreground">
+            {isPlaying ? "Playing…" : isPaused ? "Paused" : "Ready"}
+          </span>
         </div>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".txt,text/plain"
-          hidden
-          onChange={(e) => {
-            const file = e.currentTarget.files?.[0];
-            if (file) handleFilePicked(file);
-            e.currentTarget.value = "";
-          }}
-        />
+        {restartButton}
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          onClick={() => setExpanded(false)}
+          data-slot="replay-collapse"
+          aria-label="Hide replay settings"
+          title="Hide replay settings"
+          className="h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground"
+        >
+          <ChevronRightIcon className="h-4 w-4" />
+        </Button>
+      </div>
 
-        {/* Row 2: Bottom Controls */}
-        <div className="flex items-center gap-4 rounded-lg border bg-muted/30 p-3">
-          <div className="flex flex-1 flex-wrap items-center gap-x-6 gap-y-2">
-            <div className="flex items-center gap-2">
-              <Label
-                htmlFor="replay-text-delay"
-                className="whitespace-nowrap text-xs font-medium text-muted-foreground"
-              >
-                Text Delay
-              </Label>
-              <Stepper
-                value={session.textDelayMs}
-                onChange={handleDelayChange("textDelayMs")}
-                step={10}
-                ariaLabel="Text delay"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Label
-                htmlFor="replay-tool-delay"
-                className="whitespace-nowrap text-xs font-medium text-muted-foreground"
-              >
-                Tool Delay
-              </Label>
-              <Stepper
-                value={session.toolDelayMs}
-                onChange={handleDelayChange("toolDelayMs")}
-                step={100}
-                ariaLabel="Tool delay"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Label
-                htmlFor="replay-speed"
-                className="whitespace-nowrap text-xs font-medium text-muted-foreground"
-              >
-                Speed
-              </Label>
-              <Select
-                value={String(session.speed)}
-                onValueChange={(val) => onSetSpeed(Number(val) as ReplaySpeed)}
-              >
-                <SelectTrigger
-                  id="replay-speed"
-                  className="h-8 w-[80px] bg-background"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {SPEEDS.map((s) => (
-                    <SelectItem key={s} value={String(s)}>
-                      ×{s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+      {/* Source + upload */}
+      <div className="flex items-center gap-2">
+        <Select
+          value={session.source}
+          onValueChange={handleSourceChange}
+          disabled={isPlaying || isPaused}
+        >
+          <SelectTrigger id="replay-source" className="h-9 min-w-0 flex-1">
+            <FileTextIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <SelectValue placeholder="Select source" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="default">Default recording</SelectItem>
+            <SelectItem value="upload">
+              {session.fileName ? session.fileName : "Upload .txt…"}
+            </SelectItem>
+          </SelectContent>
+        </Select>
 
+        {session.source === "upload" ? (
           <Button
             type="button"
-            size="sm"
-            variant="ghost"
-            onClick={onResetTiming}
-            data-slot="replay-reset"
-            aria-label="Reset timing"
-            className="h-8 px-2 text-muted-foreground hover:text-foreground"
+            size="icon"
+            variant="outline"
+            className="h-9 w-9 shrink-0"
+            disabled={isPlaying || isPaused}
+            onClick={() => fileInputRef.current?.click()}
+            title="Choose file"
+            data-slot="replay-upload"
           >
-            <RotateCcwIcon className="mr-1.5 h-3.5 w-3.5" />
-            Reset
+            <UploadIcon className="h-4 w-4" />
           </Button>
-        </div>
-
-        {error ? (
-          <div
-            role="alert"
-            data-slot="replay-error"
-            className="text-xs font-medium text-destructive"
-          >
-            {error}
-          </div>
         ) : null}
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".txt,text/plain"
+        hidden
+        onChange={(e) => {
+          const file = e.currentTarget.files?.[0];
+          if (file) handleFilePicked(file);
+          e.currentTarget.value = "";
+        }}
+      />
+
+      {/* Timing + speed */}
+      <div className="flex flex-col gap-2 rounded-lg border bg-muted/30 p-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <Label
+            htmlFor="replay-text-delay"
+            className="whitespace-nowrap text-xs font-medium text-muted-foreground"
+          >
+            Text Delay
+          </Label>
+          <Stepper
+            value={session.textDelayMs}
+            onChange={handleDelayChange("textDelayMs")}
+            step={10}
+            ariaLabel="Text delay"
+          />
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <Label
+            htmlFor="replay-tool-delay"
+            className="whitespace-nowrap text-xs font-medium text-muted-foreground"
+          >
+            Tool Delay
+          </Label>
+          <Stepper
+            value={session.toolDelayMs}
+            onChange={handleDelayChange("toolDelayMs")}
+            step={100}
+            ariaLabel="Tool delay"
+          />
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <Label
+            htmlFor="replay-speed"
+            className="whitespace-nowrap text-xs font-medium text-muted-foreground"
+          >
+            Speed
+          </Label>
+          <Select
+            value={String(session.speed)}
+            onValueChange={(val) => onSetSpeed(Number(val) as ReplaySpeed)}
+          >
+            <SelectTrigger id="replay-speed" className="h-8 w-20 bg-background">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SPEEDS.map((s) => (
+                <SelectItem key={s} value={String(s)}>
+                  ×{s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={onResetTiming}
+          data-slot="replay-reset"
+          aria-label="Reset timing"
+          className="h-8 justify-start px-2 text-muted-foreground hover:text-foreground"
+        >
+          <RotateCcwIcon className="mr-1.5 h-3.5 w-3.5" />
+          Reset timing
+        </Button>
+      </div>
+
+      {error ? (
+        <div
+          role="alert"
+          data-slot="replay-error"
+          className="text-xs font-medium text-destructive"
+        >
+          {error}
+        </div>
+      ) : null}
     </div>
   );
 }

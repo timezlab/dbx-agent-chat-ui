@@ -80,6 +80,28 @@ describe("streamSSE (live SSE client, injected fetch)", () => {
     expect(c.closeReason).toBe("done");
   });
 
+  it("taps each raw frame via onRawFrame (for capture), excluding [DONE]", async () => {
+    const c = collect();
+    const frames: string[] = [];
+    const withDone = RECORDING + "data: [DONE]\n\n";
+    const fetchImpl = vi.fn(
+      async () => sseResponse(withDone),
+    ) as unknown as typeof fetch;
+
+    streamSSE({
+      url: "https://agent.example/invocations",
+      body: { messages: [] },
+      handlers: { ...c.handlers, onRawFrame: (d) => frames.push(d) },
+      fetchImpl,
+    });
+    await until(() => c.closeReason !== undefined);
+
+    // Every parseable data frame is tapped; the [DONE] sentinel is not.
+    expect(frames.length).toBe(3);
+    expect(frames[0]).toContain('"response.output_text.delta"');
+    expect(frames.some((f) => f.includes("[DONE]"))).toBe(false);
+  });
+
   it("POSTs JSON with the event-stream Accept header", async () => {
     const c = collect();
     const fetchMock = vi.fn(

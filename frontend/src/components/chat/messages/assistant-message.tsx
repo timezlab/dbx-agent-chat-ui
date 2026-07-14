@@ -1,9 +1,11 @@
 import * as React from "react";
 
+import { DownloadIcon } from "lucide-react";
 import { Streamdown, type BundledTheme } from "streamdown";
 
 import type { Feedback, Message } from "@/entities";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { groupMessageParts } from "@/lib/chat/message-parts";
 import { resolveReferenceLinks } from "@/lib/markdown/reference-links";
 import { splitDataImages } from "@/lib/markdown/data-images";
@@ -28,6 +30,11 @@ export interface AssistantMessageProps extends React.ComponentProps<"div"> {
   firstPlanCallId?: string | null;
   /** Show the usage/metrics footer (time · TTFT · tokens · cost). Default true. */
   showMetrics?: boolean;
+  /**
+   * Download this turn as a replayable `.txt` recording (US5 / FR-031). Provided only for
+   * completed live turns whose SSE stream was captured; omitted ⇒ the action is hidden.
+   */
+  onDownloadRecording?: () => void;
 }
 
 /** Shiki themes for streamed code blocks (light, dark) — flip with the app theme. */
@@ -58,6 +65,7 @@ export function AssistantMessage({
   onFeedback,
   firstPlanCallId,
   showMetrics = true,
+  onDownloadRecording,
   className,
   ...props
 }: AssistantMessageProps) {
@@ -178,14 +186,31 @@ export function AssistantMessage({
           <MessageMetrics message={message} streaming={streaming} />
         ) : null}
 
-        {showFeedback ? (
-          <FeedbackPanel
-            messageId={message.id}
-            value={message.feedback?.rating ?? null}
-            comment={message.feedback?.comment}
-            onSubmit={onFeedback}
-            className="mt-1"
-          />
+        {showFeedback || (onDownloadRecording != null && !streaming && hasVisible) ? (
+          <div className="mt-1 flex items-center gap-1">
+            {showFeedback ? (
+              <FeedbackPanel
+                messageId={message.id}
+                value={message.feedback?.rating ?? null}
+                comment={message.feedback?.comment}
+                onSubmit={onFeedback}
+              />
+            ) : null}
+            {onDownloadRecording != null && !streaming && hasVisible ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                onClick={onDownloadRecording}
+                data-slot="assistant-download-recording"
+                aria-label="Download replay recording (.txt)"
+                title="Download replay recording (.txt)"
+                className="size-8 text-muted-foreground hover:text-foreground"
+              >
+                <DownloadIcon className="size-4" />
+              </Button>
+            ) : null}
+          </div>
         ) : null}
       </MessageContent>
     </MessageRow>

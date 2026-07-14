@@ -68,6 +68,12 @@ export interface ChatComposerProps
   messageCount?: number;
   /** Explicit compact handler; defaults to sending the verbatim `/compact` turn (004). */
   onCompact?: () => void;
+  /**
+   * When non-null, the textarea displays this text read-only instead of the user's own input
+   * — used by Replay to "type" the recorded question into the composer (FR-029). The parent
+   * also sets `disabled` during replay; this only overrides the shown value.
+   */
+  overrideText?: string | null;
 }
 
 function generateAttachmentId(): string {
@@ -117,6 +123,7 @@ export function ChatComposer({
   contextUsage,
   messageCount = 0,
   onCompact,
+  overrideText = null,
   className,
   ...props
 }: ChatComposerProps) {
@@ -373,7 +380,10 @@ export function ChatComposer({
       <div className="px-2 pt-2">
         <Textarea
           data-slot="chat-composer-input"
-          value={text}
+          // Replay "types" the recorded question in via overrideText (read-only); otherwise
+          // the textarea is the user's own editable input.
+          value={overrideText ?? text}
+          readOnly={overrideText != null}
           onChange={(e) => onTextChange(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={disabled}

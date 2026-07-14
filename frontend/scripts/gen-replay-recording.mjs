@@ -17,6 +17,30 @@ const DEFAULT_OUTPUT = resolve(
   "../src/lib/chat/recordings/default-recording.generated.ts",
 );
 
+// The sentinel frame `type` that carries the originating user question (US5). Keep in sync
+// with `USER_REQUEST_FRAME_TYPE` in `src/lib/chat/recording.ts`. It is injected here — NOT
+// stored in `sse-recordings/default.txt` — so the raw capture stays a pure Responses stream
+// while the generated (and dev-mock) recording replays showing the real question (FR-027/28).
+const USER_REQUEST_FRAME_TYPE = "replay.user_request";
+
+// The question the committed default recording answers (a GlobalTech YTD report). Override
+// at generation time with `MOCK_USER_REQUEST` if the default capture is ever replaced.
+const DEFAULT_USER_REQUEST =
+  process.env.MOCK_USER_REQUEST ??
+  "Give me a GlobalTech YTD performance report for January to May 2026.";
+
+/**
+ * Prepend the `replay.user_request` sentinel frame (carrying `question`) to a raw recording,
+ * so replay/download can show the originating question. Idempotent: if the text already
+ * contains the sentinel it is returned unchanged.
+ */
+export function withUserRequest(text, question) {
+  if (text.includes(`"${USER_REQUEST_FRAME_TYPE}"`)) return text;
+  const header =
+    "data: " + JSON.stringify({ type: USER_REQUEST_FRAME_TYPE, text: question }) + "\n\n";
+  return header + text;
+}
+
 /**
  * Build the generated module source for a recording's text. Pure — the recording is
  * embedded via `JSON.stringify`, so it round-trips exactly and needs no escaping care.
@@ -49,7 +73,10 @@ function parseArgs(argv) {
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const { inputPath, outputPath } = parseArgs(process.argv.slice(2));
   const input = await readFile(inputPath, "utf8");
+  // Inject the user-question sentinel so the bundled default replays showing the real
+  // question — the raw `default.txt` stays a pure Responses stream (US5 / FR-027).
+  const withReq = withUserRequest(input, DEFAULT_USER_REQUEST);
   await mkdir(dirname(outputPath), { recursive: true });
-  await writeFile(outputPath, generateRecordingModule(input), "utf8");
-  console.log(`Generated ${outputPath} (${input.length} chars).`);
+  await writeFile(outputPath, generateRecordingModule(withReq), "utf8");
+  console.log(`Generated ${outputPath} (${withReq.length} chars).`);
 }

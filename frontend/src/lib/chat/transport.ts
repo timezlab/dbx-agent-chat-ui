@@ -19,6 +19,12 @@ export interface ChatStreamHandlers {
   onEvent(event: ChatStreamEvent): void;
   /** Terminal convenience; gọi đúng 1 lần sau done/error/abort. */
   onClose?(reason: "done" | "error" | "abort"): void;
+  /**
+   * Optional raw-frame tap (US5): the un-prefixed `data:` payload of each SSE frame, before
+   * parsing. Used to capture a live turn as a replayable recording (see `serializeRecording`);
+   * `[DONE]` is not forwarded. Purely observational — it never affects the parse/terminal path.
+   */
+  onRawFrame?(data: string): void;
 }
 
 export interface ChatTransport {
@@ -134,6 +140,8 @@ export function streamSSE(options: StreamSSEOptions): AbortController {
     onmessage(ev) {
       if (closed) return;
       if (ev.data.trim() === "[DONE]") return finish("done");
+      // Tap the raw frame for capture (US5) before parsing — observational only.
+      handlers.onRawFrame?.(ev.data);
       let json: unknown;
       try {
         json = JSON.parse(ev.data);
