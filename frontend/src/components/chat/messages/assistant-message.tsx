@@ -18,6 +18,7 @@ import { FeedbackPanel } from "../feedback-panel";
 import { LinkSafetyModal } from "../link-safety-modal";
 import { MessageMetrics } from "./message-metrics";
 import { useOverlayTables } from "./use-overlay-tables";
+import { FollowUpSuggestions } from "./follow-up-suggestions";
 
 export interface AssistantMessageProps extends React.ComponentProps<"div"> {
   message: Message;
@@ -35,6 +36,8 @@ export interface AssistantMessageProps extends React.ComponentProps<"div"> {
    * completed live turns whose SSE stream was captured; omitted ⇒ the action is hidden.
    */
   onDownloadRecording?: () => void;
+  /** Callback when a follow-up question is clicked. */
+  onSendPrompt?: (text: string) => void;
 }
 
 /** Shiki themes for streamed code blocks (light, dark) — flip with the app theme. */
@@ -66,6 +69,7 @@ export function AssistantMessage({
   firstPlanCallId,
   showMetrics = true,
   onDownloadRecording,
+  onSendPrompt,
   className,
   ...props
 }: AssistantMessageProps) {
@@ -84,6 +88,8 @@ export function AssistantMessage({
   const contentRef = React.useRef<HTMLDivElement>(null);
   useOverlayTables(contentRef);
 
+  const suggestionsPart = message.parts.find((p) => p.type === "suggestions");
+
   return (
     <MessageRow
       align="start"
@@ -95,10 +101,17 @@ export function AssistantMessage({
       <MessageContent ref={contentRef}>
         {segments.map((segment, i) => {
           if (segment.kind === "text") {
+            let textToRender = segment.part.text;
+            if (streaming) {
+              const tagStart = textToRender.indexOf("<suggested-followups>");
+              if (tagStart !== -1) {
+                textToRender = textToRender.slice(0, tagStart);
+              }
+            }
             // Base64 images an agent streams are rendered by us (see renderTextSegment) —
             // Streamdown blocks `data:` image URIs and offers no opt-in prop.
             const blocks = splitDataImages(
-              resolveReferenceLinks(segment.part.text),
+              resolveReferenceLinks(textToRender),
             );
             const lastMd = blocks.map((b) => b.type).lastIndexOf("md");
             return (
@@ -178,6 +191,13 @@ export function AssistantMessage({
         ) : null}
 
         {message.error ? <StreamError message={message.error} /> : null}
+
+        {suggestionsPart?.type === "suggestions" && suggestionsPart.items.length > 0 ? (
+          <FollowUpSuggestions
+            items={suggestionsPart.items}
+            onSelectPrompt={onSendPrompt}
+          />
+        ) : null}
 
         {/* Usage/metrics footer: a live clock while streaming (client-measured time · TTFT),
             then tokens · cost once the backend `usage` frame lands. Self-hides when there is

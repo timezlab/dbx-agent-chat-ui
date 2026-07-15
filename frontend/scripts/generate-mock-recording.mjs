@@ -564,6 +564,11 @@ const outputText = `## GlobalTech — Business Performance Overview YTD Jan–Ma
 [[2] market-scan-2026 (web search)](https://example.com/market)
 
 [Click here for the full report](https://example.com/report)
+
+<suggested-followups>
+  <question>Can you explain the services margin drop?</question>
+  <question>What is our target for Enterprise Q3?</question>
+</suggested-followups>
 `;
 
 addOutput(outputText);

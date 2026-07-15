@@ -51,7 +51,7 @@ export function reduceStreamEvent(
       return {
         ...mapActive(conversation, (m) => ({
           ...m,
-          parts: dropEmptyParts(m.parts),
+          parts: dropEmptyParts(extractSuggestions(m.parts)),
           status: "complete",
         })),
         activeId: null,
@@ -172,6 +172,35 @@ function dropEmptyParts(parts: MessagePart[]): MessagePart[] {
     (p) =>
       (p.type !== "text" && p.type !== "reasoning") || p.text.trim() !== "",
   );
+}
+
+/** 
+ * Extract `<suggested-followups>` XML block from the final text part, removing it
+ * from the Markdown rendering and converting it into a structured `SuggestionsPart`.
+ */
+function extractSuggestions(parts: MessagePart[]): MessagePart[] {
+  if (parts.length === 0) return parts;
+  const last = parts[parts.length - 1];
+  if (last.type !== "text") return parts;
+
+  const match = last.text.match(/<suggested-followups>([\s\S]*?)<\/suggested-followups>/);
+  if (!match) return parts;
+
+  const innerXml = match[1];
+  const questionMatches = [...innerXml.matchAll(/<question>([\s\S]*?)<\/question>/g)];
+  const questions = questionMatches.map((m) => m[1].trim()).filter(Boolean);
+
+  if (questions.length === 0) return parts;
+
+  const cleanText = last.text.replace(/<suggested-followups>[\s\S]*?<\/suggested-followups>/, "").replace(/\s+$/, "");
+
+  const newParts = [...parts.slice(0, -1)];
+  if (cleanText) {
+    newParts.push({ type: "text", text: cleanText });
+  }
+  newParts.push({ type: "suggestions", items: questions });
+  
+  return newParts;
 }
 
 /** Rebuild the session with the active message transformed. */

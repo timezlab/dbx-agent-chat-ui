@@ -114,6 +114,7 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
           showMetrics={usageEnabled}
           recordedIds={recordedIds}
           onDownloadRecording={downloadRecording}
+          onSendPrompt={send}
           className="min-h-0 flex-1"
         />
       )}

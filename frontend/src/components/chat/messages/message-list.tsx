@@ -27,6 +27,8 @@ export interface MessageListProps extends React.ComponentProps<"div"> {
   recordedIds?: Set<string>;
   /** Download a captured assistant turn as a replayable `.txt`. */
   onDownloadRecording?: (assistantId: string) => void;
+  /** Send a follow-up question. */
+  onSendPrompt?: (text: string) => void;
 }
 
 /**
@@ -41,6 +43,7 @@ export function MessageList({
   showMetrics = true,
   recordedIds,
   onDownloadRecording,
+  onSendPrompt,
   className,
   ...props
 }: MessageListProps) {
@@ -77,6 +80,7 @@ export function MessageList({
                     onFeedback={onFeedback}
                     firstPlanCallId={firstPlanCallId}
                     showMetrics={showMetrics}
+                    onSendPrompt={onSendPrompt}
                     onDownloadRecording={
                       recordedIds?.has(message.id) && onDownloadRecording
                         ? () => onDownloadRecording(message.id)

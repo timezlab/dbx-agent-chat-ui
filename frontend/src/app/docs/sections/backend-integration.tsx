@@ -127,6 +127,13 @@ export function BackendIntegrationSection() {
               <InlineCode>{`{"type": "response.reasoning_text.delta", "delta": "Let me think..."}`}</InlineCode>
             </li>
             <li>
+              <strong className="text-foreground">
+                Follow-up Suggestions (Optional):
+              </strong>{" "}
+              Stream an XML block within your text tokens to render clickable suggestion buttons. The UI automatically hides the XML from the markdown and extracts the questions. Example:{" "}
+              <InlineCode>{`<suggested-followups><question>Tell me more</question></suggested-followups>`}</InlineCode>
+            </li>
+            <li>
               <strong className="text-foreground">Tool Call Start:</strong>{" "}
               <InlineCode>{`{"type": "response.output_item.done", "item": {"type": "function_call", "call_id": "call_123", "name": "search", "arguments": "{}"}}`}</InlineCode>
             </li>
