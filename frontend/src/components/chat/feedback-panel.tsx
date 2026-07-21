@@ -8,8 +8,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
-export interface FeedbackPanelProps
-  extends Omit<React.ComponentProps<"div">, "onSubmit"> {
+export interface UseFeedbackOptions {
   messageId: string;
   /** Current saved selection (single choice), typically `message.feedback?.rating`. */
   value?: FeedbackRating | null;
@@ -22,6 +21,22 @@ export interface FeedbackPanelProps
   reasons?: Record<FeedbackRating, string[]>;
   /** Submit to the resolved sink. Rejection is non-blocking; the form stays open. */
   onSubmit: (feedback: Feedback) => void | Promise<void>;
+}
+
+export interface FeedbackPanelProps
+  extends Omit<React.ComponentProps<"div">, "onSubmit">,
+    UseFeedbackOptions {}
+
+/** The two rating pieces produced by {@link useFeedback}: the inline thumb controls (meant to
+ *  sit in a toolbar row alongside other actions) and the expansion (form / confirmation card,
+ *  rendered on its own line below the toolbar). */
+export interface FeedbackParts {
+  /** Current rating selection (or null). */
+  rating: FeedbackRating | null;
+  /** Thumb up/down buttons, as a fragment — the caller supplies the row wrapper. */
+  thumbs: React.ReactNode;
+  /** The reason/comment form or the submitted confirmation card; `null` when idle. */
+  expansion: React.ReactNode;
 }
 
 /**
@@ -82,23 +97,24 @@ function ReasonChip({
 }
 
 /**
- * Thumbs up/down + an optional quick-reason/comment for an assistant reply (FR-010, D10).
+ * Feedback state + rendering for an assistant reply (FR-010, D10), split into composable
+ * {@link FeedbackParts} so the caller can place the thumb controls inside a shared action
+ * toolbar (next to copy / download) while the reason/comment expansion flows on its own line
+ * below. State is shared between the two pieces because they come from one hook call.
  *
- * Interaction (redesigned): clicking a thumb only SELECTS the rating (it colors in) and
- * opens the form — nothing is sent yet. The submission is fired ONCE, on the explicit
- * "Submit" button, whether or not a comment was added. A settled/restored submission shows
- * a compact confirmation with the comment; "Edit" re-opens the form. Single choice — the
- * thumb reflects the current rating; a rejected submit is non-blocking and keeps the form.
+ * Interaction: clicking a thumb only SELECTS the rating (it colors in) and opens the form —
+ * nothing is sent yet. The submission is fired ONCE, on the explicit "Submit" button, whether
+ * or not a comment was added. A settled/restored submission shows a compact confirmation with
+ * the comment; "Edit" re-opens the form. Single choice — the thumb reflects the current rating;
+ * a rejected submit is non-blocking and keeps the form.
  */
-export function FeedbackPanel({
+export function useFeedback({
   messageId,
   value = null,
   comment: savedComment,
   reasons = DEFAULT_REASONS,
   onSubmit,
-  className,
-  ...props
-}: FeedbackPanelProps) {
+}: UseFeedbackOptions): FeedbackParts {
   // "idle" → thumbs only; "editing" → thumbs + form; "submitted" → thumbs + confirmation.
   const [phase, setPhase] = React.useState<"idle" | "editing" | "submitted">(
     value != null ? "submitted" : "idle",
@@ -192,113 +208,134 @@ export function FeedbackPanel({
 
   const activeReasons = rating ? (reasons[rating] ?? []) : [];
 
+  const thumbs = (
+    <>
+      {thumb("up")}
+      {thumb("down")}
+    </>
+  );
+
+  const expansion =
+    phase === "editing" && rating ? (
+      <div
+        data-slot="feedback-form"
+        className="flex flex-col gap-2.5 rounded-xl border border-border bg-card p-3 animate-in fade-in-0 slide-in-from-top-1 duration-200"
+      >
+        <p className="text-xs font-medium text-muted-foreground">
+          {rating === "up"
+            ? "What did you like? (optional)"
+            : "What went wrong? (optional)"}
+        </p>
+
+        <div className="flex flex-wrap gap-1.5">
+          {activeReasons.map((reason) => (
+            <ReasonChip
+              key={reason}
+              active={picked.has(reason)}
+              onClick={() => toggleReason(reason)}
+            >
+              {reason}
+            </ReasonChip>
+          ))}
+          <ReasonChip active={otherOpen} onClick={() => setOtherOpen((v) => !v)}>
+            Other…
+          </ReasonChip>
+        </div>
+
+        {otherOpen ? (
+          <Textarea
+            data-slot="feedback-comment"
+            value={other}
+            onChange={(e) => setOther(e.target.value)}
+            placeholder="Add a comment"
+            rows={2}
+            autoFocus
+            aria-label="Feedback comment"
+            className="min-h-16 resize-none text-sm"
+          />
+        ) : null}
+
+        <div className="flex items-center gap-2">
+          <Button type="button" size="sm" onClick={submit} disabled={pending}>
+            {pending ? "Submitting…" : "Submit"}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={cancel}
+            disabled={pending}
+          >
+            Cancel
+          </Button>
+          {error ? (
+            <span role="status" className="text-xs text-destructive">
+              {error}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    ) : phase === "submitted" ? (
+      <div
+        data-slot="feedback-submitted"
+        className="flex flex-col gap-1.5 rounded-xl border border-border bg-muted/40 px-3 py-2 animate-in fade-in-0 duration-200"
+      >
+        <div className="flex items-center gap-2 text-sm">
+          <span className="font-medium text-foreground">
+            Thanks for your feedback
+          </span>
+          <Button
+            type="button"
+            size="xs"
+            variant="ghost"
+            onClick={() => rating && openEditor(rating)}
+            className="ml-auto text-muted-foreground"
+          >
+            <PencilIcon />
+            Edit
+          </Button>
+        </div>
+        {savedComment ? (
+          <p className="border-l-2 border-border pl-2.5 text-sm whitespace-pre-wrap text-muted-foreground">
+            {savedComment}
+          </p>
+        ) : null}
+      </div>
+    ) : null;
+
+  return { rating, thumbs, expansion };
+}
+
+/**
+ * Self-contained feedback control: the thumb toggles in a row with the reason/comment
+ * expansion below. Thin wrapper over {@link useFeedback} for standalone use; the assistant
+ * message composes the pieces directly so the thumbs share one action toolbar with copy /
+ * download.
+ */
+export function FeedbackPanel({
+  messageId,
+  value,
+  comment,
+  reasons,
+  onSubmit,
+  className,
+  ...props
+}: FeedbackPanelProps) {
+  const { thumbs, expansion } = useFeedback({
+    messageId,
+    value,
+    comment,
+    reasons,
+    onSubmit,
+  });
   return (
     <div
       data-slot="feedback-panel"
       className={cn("flex flex-col gap-2", className)}
       {...props}
     >
-      <div className="flex items-center gap-1">
-        {thumb("up")}
-        {thumb("down")}
-      </div>
-
-      {phase === "editing" && rating ? (
-        <div
-          data-slot="feedback-form"
-          className="flex flex-col gap-2.5 rounded-xl border border-border bg-card p-3 animate-in fade-in-0 slide-in-from-top-1 duration-200"
-        >
-          <p className="text-xs font-medium text-muted-foreground">
-            {rating === "up"
-              ? "What did you like? (optional)"
-              : "What went wrong? (optional)"}
-          </p>
-
-          <div className="flex flex-wrap gap-1.5">
-            {activeReasons.map((reason) => (
-              <ReasonChip
-                key={reason}
-                active={picked.has(reason)}
-                onClick={() => toggleReason(reason)}
-              >
-                {reason}
-              </ReasonChip>
-            ))}
-            <ReasonChip
-              active={otherOpen}
-              onClick={() => setOtherOpen((v) => !v)}
-            >
-              Other…
-            </ReasonChip>
-          </div>
-
-          {otherOpen ? (
-            <Textarea
-              data-slot="feedback-comment"
-              value={other}
-              onChange={(e) => setOther(e.target.value)}
-              placeholder="Add a comment"
-              rows={2}
-              autoFocus
-              aria-label="Feedback comment"
-              className="min-h-16 resize-none text-sm"
-            />
-          ) : null}
-
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              onClick={submit}
-              disabled={pending}
-            >
-              {pending ? "Submitting…" : "Submit"}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={cancel}
-              disabled={pending}
-            >
-              Cancel
-            </Button>
-            {error ? (
-              <span role="status" className="text-xs text-destructive">
-                {error}
-              </span>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
-      {phase === "submitted" ? (
-        <div
-          data-slot="feedback-submitted"
-          className="flex flex-col gap-1.5 rounded-xl border border-border bg-muted/40 px-3 py-2 animate-in fade-in-0 duration-200"
-        >
-          <div className="flex items-center gap-2 text-sm">
-            <span className="font-medium text-foreground">
-              Thanks for your feedback
-            </span>
-            <Button
-              type="button"
-              size="xs"
-              variant="ghost"
-              onClick={() => rating && openEditor(rating)}
-              className="ml-auto text-muted-foreground"
-            >
-              <PencilIcon />
-              Edit
-            </Button>
-          </div>
-          {savedComment ? (
-            <p className="border-l-2 border-border pl-2.5 text-sm whitespace-pre-wrap text-muted-foreground">
-              {savedComment}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
+      <div className="flex items-center gap-1">{thumbs}</div>
+      {expansion}
     </div>
   );
 }

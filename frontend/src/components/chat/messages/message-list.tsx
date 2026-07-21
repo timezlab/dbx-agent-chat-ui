@@ -23,9 +23,8 @@ export interface MessageListProps extends React.ComponentProps<"div"> {
   firstPlanCallId?: string | null;
   /** Show the per-reply usage/metrics footer (time · TTFT · tokens · cost). Default true. */
   showMetrics?: boolean;
-  /** Assistant turn ids with a captured, downloadable recording (US5 / FR-031). */
-  recordedIds?: Set<string>;
-  /** Download a captured assistant turn as a replayable `.txt`. */
+  /** Download a settled assistant turn as a replayable `.txt`, synthesized from its
+   *  reconciled parts (US5 / FR-031). Available on every settled turn, incl. history. */
   onDownloadRecording?: (assistantId: string) => void;
   /** Send a follow-up question. */
   onSendPrompt?: (text: string) => void;
@@ -41,7 +40,6 @@ export function MessageList({
   onFeedback,
   firstPlanCallId,
   showMetrics = true,
-  recordedIds,
   onDownloadRecording,
   onSendPrompt,
   className,
@@ -82,7 +80,7 @@ export function MessageList({
                     showMetrics={showMetrics}
                     onSendPrompt={onSendPrompt}
                     onDownloadRecording={
-                      recordedIds?.has(message.id) && onDownloadRecording
+                      onDownloadRecording
                         ? () => onDownloadRecording(message.id)
                         : undefined
                     }

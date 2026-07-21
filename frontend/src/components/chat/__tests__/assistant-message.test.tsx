@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Message } from "@/entities";
@@ -101,5 +101,61 @@ describe("AssistantMessage rendering (US3)", () => {
     expect(
       screen.getByRole("button", { name: "Good response" }),
     ).toBeInTheDocument();
+  });
+
+  it("shows copy + download on ONE action row, with the feedback thumbs, on a settled turn", () => {
+    const onFeedback = vi.fn();
+    const onDownloadRecording = vi.fn();
+    const { container } = render(
+      <AssistantMessage
+        message={assistant({ parts: [{ type: "text", text: "the answer" }] })}
+        onFeedback={onFeedback}
+        onDownloadRecording={onDownloadRecording}
+      />,
+    );
+    const copy = container.querySelector('[data-slot="assistant-copy"]');
+    const download = container.querySelector(
+      '[data-slot="assistant-download-recording"]',
+    );
+    const thumb = screen.getByRole("button", { name: "Good response" });
+    expect(copy).not.toBeNull();
+    expect(download).not.toBeNull();
+    // All three live in the SAME toolbar row (the feedback form/card is a separate sibling).
+    expect(copy?.parentElement).toBe(download?.parentElement);
+    expect(thumb.parentElement).toBe(copy?.parentElement);
+
+    fireEvent.click(download!);
+    expect(onDownloadRecording).toHaveBeenCalledOnce();
+  });
+
+  it("copies the reply's markdown to the clipboard", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.assign(navigator, { clipboard: { writeText } });
+    const { container } = render(
+      <AssistantMessage
+        message={assistant({ parts: [{ type: "text", text: "**copy me**" }] })}
+      />,
+    );
+    fireEvent.click(container.querySelector('[data-slot="assistant-copy"]')!);
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("**copy me**"));
+  });
+
+  it("offers copy even without a feedback sink, but not while streaming", () => {
+    const { container, rerender } = render(
+      <AssistantMessage
+        message={assistant({ parts: [{ type: "text", text: "done" }] })}
+      />,
+    );
+    expect(container.querySelector('[data-slot="assistant-copy"]')).not.toBeNull();
+
+    rerender(
+      <AssistantMessage
+        message={assistant({
+          status: "streaming",
+          parts: [{ type: "text", text: "typing" }],
+        })}
+      />,
+    );
+    expect(container.querySelector('[data-slot="assistant-copy"]')).toBeNull();
   });
 });

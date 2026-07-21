@@ -47,15 +47,15 @@ describe("ReplayControl (US1)", () => {
     expect(root?.className).toContain("custom-marker");
   });
 
-  it("is collapsed to an icon rail by default and expands on the settings toggle", () => {
-    const { container } = renderControl();
-    // Collapsed: play + restart + settings, but no timing controls or source select yet.
-    expect(container.querySelector('[data-expanded="false"]')).not.toBeNull();
+  it("is a collapsed icon rail by default and opens the settings dialog on the toggle", () => {
+    renderControl();
+    // Collapsed rail: play + restart + settings, but no dialog / timing controls yet.
     expect(screen.queryByLabelText("Text delay")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByRole("button", { name: /play replay/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /show replay settings/i }));
-    expect(container.querySelector('[data-expanded="true"]')).not.toBeNull();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByLabelText("Text delay")).toBeInTheDocument();
   });
 
@@ -77,11 +77,71 @@ describe("ReplayControl (US1)", () => {
     expect(play).toBeDisabled();
   });
 
-  it("exposes the timing controls once expanded and no longer docks the todo strip (todos live on the composer)", () => {
-    const { container } = renderControl();
+  it("exposes the timing controls inside the dialog and no longer docks the todo strip (todos live on the composer)", () => {
+    renderControl();
     fireEvent.click(screen.getByRole("button", { name: /show replay settings/i }));
     expect(screen.getByLabelText("Text delay")).toBeInTheDocument();
     expect(screen.getByLabelText("Tool delay")).toBeInTheDocument();
-    expect(container.querySelector('[data-slot="todo-card"]')).toBeNull();
+    expect(document.querySelector('[data-slot="todo-card"]')).toBeNull();
+  });
+
+  it("lets the user paste recording text, pushing it as an upload source", () => {
+    const { handlers } = renderControl(idleSession({ source: "upload" }));
+    fireEvent.click(screen.getByRole("button", { name: /show replay settings/i }));
+
+    const textarea = screen.getByLabelText(/paste recording/i);
+    fireEvent.change(textarea, {
+      target: { value: 'data: {"type":"response.output_text.delta","delta":"hi"}\n\n' },
+    });
+
+    expect(handlers.onSetSource).toHaveBeenCalledWith({
+      kind: "upload",
+      fileName: "Pasted recording",
+      text: 'data: {"type":"response.output_text.delta","delta":"hi"}\n\n',
+    });
+  });
+
+  it("hides the paste field for the default source", () => {
+    renderControl(idleSession({ source: "default" }));
+    fireEvent.click(screen.getByRole("button", { name: /show replay settings/i }));
+    expect(screen.queryByLabelText(/paste recording/i)).toBeNull();
+  });
+
+  it("switches source via the segmented control instead of a dropdown", () => {
+    const { handlers } = renderControl(idleSession({ source: "default" }));
+    fireEvent.click(screen.getByRole("button", { name: /show replay settings/i }));
+    // The Custom tab flips the source to an (empty) upload, keeping Play blocked.
+    fireEvent.click(screen.getByRole("tab", { name: /custom/i }));
+    expect(handlers.onSetSource).toHaveBeenCalledWith({
+      kind: "upload",
+      fileName: "",
+      text: "",
+    });
+  });
+
+  it("starts playback from the dialog and closes it (no need to close first)", () => {
+    const { handlers } = renderControl(idleSession({ source: "default" }));
+    fireEvent.click(screen.getByRole("button", { name: /show replay settings/i }));
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /start replay/i }));
+    expect(handlers.onPlay).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("clears a pasted recording back to an empty upload source", () => {
+    const { handlers } = renderControl(
+      idleSession({ source: "upload", fileName: "Pasted recording" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /show replay settings/i }));
+    fireEvent.change(screen.getByLabelText(/paste recording/i), {
+      target: { value: "data: {}\n\n" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /clear recording/i }));
+    expect(handlers.onSetSource).toHaveBeenLastCalledWith({
+      kind: "upload",
+      fileName: "",
+      text: "",
+    });
   });
 });

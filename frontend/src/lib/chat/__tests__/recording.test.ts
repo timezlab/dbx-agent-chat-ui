@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 
+import type { ChatSession, Message } from "@/entities";
+import { createResponsesParser } from "@/lib/chat/responses";
+import { reduceStreamEvent } from "@/lib/chat/reducer";
 import {
   TEXT_DELAY_MS,
   TOOL_DELAY_MS,
   USER_REQUEST_FRAME_TYPE,
+  buildRecordingFrames,
   delayFor,
   extractUserRequest,
   parseFrames,
@@ -132,5 +136,129 @@ describe("serializeRecording", () => {
   it("prefixes each line of a multi-line frame with data:", () => {
     const out = serializeRecording("q", ["line-1\nline-2"]);
     expect(out).toContain("data: line-1\ndata: line-2\n\n");
+  });
+});
+
+describe("buildRecordingFrames", () => {
+  /** Base assistant turn; callers override `parts` / `metrics`. */
+  function assistant(overrides: Partial<Message> = {}): Message {
+    return {
+      id: "a1",
+      role: "assistant",
+      parts: [],
+      attachments: [],
+      status: "complete",
+      error: null,
+      feedback: null,
+      createdAt: 0,
+      ...overrides,
+    };
+  }
+
+  /**
+   * Drive the reconstructed frames through the SAME parser + reducer path replay uses,
+   * returning the assembled assistant `Message`. This is the fidelity contract: replaying a
+   * reconstructed recording must rebuild the exact turn the user saw.
+   */
+  function replayFrames(message: Message): Message {
+    const frames = buildRecordingFrames(message);
+    const parser = createResponsesParser();
+    let session: ChatSession = {
+      id: "s1",
+      messages: [{ ...message, parts: [], metrics: undefined, status: "streaming" }],
+      activeId: message.id,
+      queue: [],
+      status: "streaming",
+    };
+    for (const frame of frames) {
+      for (const event of parser.map(JSON.parse(frame))) {
+        session = reduceStreamEvent(session, event);
+      }
+    }
+    return session.messages[0];
+  }
+
+  it("round-trips a text-only turn back to the same parts", () => {
+    const msg = assistant({
+      parts: [{ type: "text", text: "Hello **world**, this is a report." }],
+    });
+    const out = replayFrames(msg);
+    expect(out.parts).toEqual(msg.parts);
+    expect(out.status).toBe("complete");
+  });
+
+  it("chunks text word-by-word but keeps a base64 data URI and a markdown table intact", () => {
+    const text =
+      "| A | B |\n| - | - |\n| 1 | 2 |\n\n" +
+      "![chart](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC)\n\n" +
+      "Some trailing prose with several words here.";
+    const msg = assistant({ parts: [{ type: "text", text }] });
+    const frames = buildRecordingFrames(msg);
+    // Word-level granularity: many small text deltas, not one giant frame.
+    const textDeltas = frames
+      .map((f) => JSON.parse(f))
+      .filter((o) => o.type === "response.output_text.delta");
+    expect(textDeltas.length).toBeGreaterThan(5);
+    // The base64 data URI must survive as a single unbroken token (no whitespace inside it).
+    expect(
+      textDeltas.some((o: { delta: string }) =>
+        o.delta.includes(
+          "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC",
+        ),
+      ),
+    ).toBe(true);
+    // And the assembled text is byte-identical to the original.
+    expect(replayFrames(msg).parts).toEqual(msg.parts);
+  });
+
+  it("round-trips interleaved reasoning, tools, and text in order", () => {
+    const msg = assistant({
+      parts: [
+        { type: "reasoning", text: "Let me think about this carefully." },
+        {
+          type: "tools",
+          items: [
+            {
+              id: "toolu_1",
+              name: "write_todos",
+              args: { todos: ["a", "b"] },
+              detail: "done ✅",
+              status: "done",
+              durationMs: 40,
+            },
+          ],
+        },
+        { type: "text", text: "Here is the answer." },
+      ],
+    });
+    expect(replayFrames(msg).parts).toEqual(msg.parts);
+  });
+
+  it("reconstructs a suggestions block so it re-extracts on done", () => {
+    const msg = assistant({
+      parts: [
+        { type: "text", text: "The report is ready." },
+        { type: "suggestions", items: ["Break down by region?", "Show Q2 detail?"] },
+      ],
+    });
+    expect(replayFrames(msg).parts).toEqual(msg.parts);
+  });
+
+  it("emits usage before the terminal so metrics attach during replay", () => {
+    const msg = assistant({
+      parts: [{ type: "text", text: "Answer." }],
+      metrics: { inputTokens: 8450, outputTokens: 2130, totalTokens: 10580, costUsd: 0.06 },
+    });
+    const out = replayFrames(msg);
+    expect(out.parts).toEqual(msg.parts);
+    expect(out.metrics).toEqual(msg.metrics);
+  });
+
+  it("produces a downloadable recording that embeds the question and re-parses", () => {
+    const msg = assistant({ parts: [{ type: "text", text: "Four." }] });
+    const recording = serializeRecording("What is 2 + 2?", buildRecordingFrames(msg));
+    expect(extractUserRequest(recording)).toBe("What is 2 + 2?");
+    // Frames round-trip through the plain frame splitter.
+    expect(parseFrames(recording).length).toBeGreaterThan(1);
   });
 });

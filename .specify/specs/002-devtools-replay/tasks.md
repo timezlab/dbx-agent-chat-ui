@@ -223,3 +223,15 @@ Enforce TDD (Principle VI): each test must fail for the expected reason before p
 - [ ] T047 [US5] `use-chat.ts`: `recordingsRef` capture per assistant turn; expose `downloadRecording(id)` + `recordedIds`; clear on new/select conversation (FR-031/FR-032). Test in `use-chat` tests.
 - [ ] T048 [US5] Download button in `assistant-message.tsx`, threaded via `chat-provider.tsx` + `messages/message-list.tsx`; shown only for turns with a captured recording (FR-031).
 - [ ] T049 [US5] Run quality gates: `pnpm test` + `pnpm lint` + typecheck.
+
+## Extension — 2026-07-21: reconstructed download · settings dialog · action toolbar
+
+Supersedes the raw-frame capture approach (T046–T048): the download now SYNTHESIZES the recording from the reducer's reconciled `Message.parts[]` + `metrics`, so it is coherent after an interrupted+retried stream and works for any settled turn (incl. History-loaded ones). Enforce TDD (Principle VI).
+
+- [x] T060 [US5] `recording.ts`: add pure `buildRecordingFrames(message)` + `chunkText(text)` — word-level, lossless (`join === text`, base64/tables intact); content frames → usage (`response.completed`, before terminal) → `message` terminal. Round-trip tests via parser+reducer in `recording.test.ts`.
+- [x] T061 [US5] `use-chat.ts`: rewrite `downloadRecording(id)` to reconstruct from the message + preceding user turn's question; remove `recordingsRef`/`recordedIds`/`onRawFrame` capture. Tests rewritten in `use-chat.recording.test.ts`.
+- [x] T062 [US5] `transport.ts`: drop the now-unused `onRawFrame` tap from `ChatStreamHandlers` + `streamSSE`; remove its `sse-client.test.ts` case.
+- [x] T063 [US5] `message-list.tsx` + `chat-screen.tsx`: drop `recordedIds` gating — offer download on every settled assistant turn (the button self-gates on `!streaming && hasVisible`).
+- [x] T064 [US5] `replay-control.tsx`: replace the inline expand panel with a shadcn `Dialog`; add a paste `Textarea` (fixed height, `field-sizing-fixed`, internal scroll) alongside the file upload, both feeding the `upload` source. Dialog scrolls (`max-h-[85vh]`). Tests in `replay-control.test.tsx`.
+- [x] T065 [US5] `feedback-panel.tsx`: extract `useFeedback()` returning `{ thumbs, expansion }` (keep `FeedbackPanel` wrapper); `assistant-message.tsx` composes a single action row (feedback thumbs · copy · download) with the feedback form expanding below. Adds a copy-markdown button. Tests in `assistant-message.test.tsx`.
+- [x] T066 [US5] Quality gates: `pnpm test` (333) + `pnpm lint` (0 errors) green.

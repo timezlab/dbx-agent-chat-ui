@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { DownloadIcon } from "lucide-react";
+import { CheckCheckIcon, CopyIcon, DownloadIcon } from "lucide-react";
 import { Streamdown, type BundledTheme } from "streamdown";
 
 import type { Feedback, Message } from "@/entities";
@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { LoaderOne } from "@/components/ui/loader";
 import { ActivityGroup } from "../activity-group";
 import { StreamError } from "../stream-error";
-import { FeedbackPanel } from "../feedback-panel";
+import { useFeedback } from "../feedback-panel";
 import { LinkSafetyModal } from "../link-safety-modal";
 import { MessageMetrics } from "./message-metrics";
 import { useOverlayTables } from "./use-overlay-tables";
@@ -54,6 +54,42 @@ const LINK_SAFETY = {
   ),
 };
 
+/** No-op submit for `useFeedback` when a turn has no feedback sink (hooks run unconditionally). */
+const NOOP_FEEDBACK = () => {};
+
+/** Copy the reply's markdown to the clipboard, flipping to a check for a beat as confirmation. */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = React.useState(false);
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  React.useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    [],
+  );
+  const copy = () => {
+    void navigator.clipboard?.writeText(text).then(() => {
+      setCopied(true);
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <Button
+      type="button"
+      size="icon-sm"
+      variant="ghost"
+      onClick={copy}
+      data-slot="assistant-copy"
+      aria-label={copied ? "Copied" : "Copy reply"}
+      title="Copy reply"
+      className="text-muted-foreground hover:text-foreground"
+    >
+      {copied ? <CheckCheckIcon /> : <CopyIcon />}
+    </Button>
+  );
+}
+
 /**
  * An assistant turn. A column that walks `Message.parts[]` in stream
  * order (FR-003/FR-004/FR-005) after folding each consecutive reasoning+tools run into
@@ -61,7 +97,8 @@ const LINK_SAFETY = {
  * `text` → markdown/code via `streamdown` (animating caret while streaming); an
  * `activity` group → the folded process dropdown, open + live while it is the streaming
  * tail and auto-collapsing when the answer starts. An error frame renders inline below
- * the partial output (FR-009); a settled turn shows the feedback panel.
+ * the partial output (FR-009); a settled turn shows the action toolbar (feedback · copy ·
+ * download) with the feedback form expanding below it.
  */
 export function AssistantMessage({
   message,
@@ -83,6 +120,25 @@ export function AssistantMessage({
       (p.type === "tools" && p.items.length > 0),
   );
   const showFeedback = onFeedback != null && !streaming && hasVisible;
+
+  // Feedback state lives in a hook so the thumb controls can join the same action toolbar as
+  // copy / download while the reason/comment form expands on its own line below (hooks run
+  // unconditionally; the thumbs only render when `showFeedback`).
+  const feedback = useFeedback({
+    messageId: message.id,
+    value: message.feedback?.rating ?? null,
+    comment: message.feedback?.comment,
+    onSubmit: onFeedback ?? NOOP_FEEDBACK,
+  });
+
+  // Plain markdown of the reply (its text parts), for the copy action.
+  const plainText = message.parts
+    .filter((p) => p.type === "text")
+    .map((p) => p.text)
+    .join("\n\n")
+    .trim();
+  const showCopy = !streaming && hasVisible && plainText.length > 0;
+  const showDownload = onDownloadRecording != null && !streaming && hasVisible;
 
   // Overlay scrollbars on any markdown table Streamdown renders in this turn (see hook).
   const contentRef = React.useRef<HTMLDivElement>(null);
@@ -206,30 +262,29 @@ export function AssistantMessage({
           <MessageMetrics message={message} streaming={streaming} />
         ) : null}
 
-        {showFeedback || (onDownloadRecording != null && !streaming && hasVisible) ? (
-          <div className="mt-1 flex items-center gap-1">
-            {showFeedback ? (
-              <FeedbackPanel
-                messageId={message.id}
-                value={message.feedback?.rating ?? null}
-                comment={message.feedback?.comment}
-                onSubmit={onFeedback}
-              />
-            ) : null}
-            {onDownloadRecording != null && !streaming && hasVisible ? (
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                onClick={onDownloadRecording}
-                data-slot="assistant-download-recording"
-                aria-label="Download replay recording (.txt)"
-                title="Download replay recording (.txt)"
-                className="size-8 text-muted-foreground hover:text-foreground"
-              >
-                <DownloadIcon className="size-4" />
-              </Button>
-            ) : null}
+        {/* Action toolbar: feedback thumbs · copy · download share ONE row; the feedback
+            reason/comment form (when open) flows on its own line below (FR-010 / US5). */}
+        {showFeedback || showCopy || showDownload ? (
+          <div className="mt-1 flex flex-col gap-2">
+            <div className="flex items-center gap-1">
+              {showFeedback ? feedback.thumbs : null}
+              {showCopy ? <CopyButton text={plainText} /> : null}
+              {showDownload ? (
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  onClick={onDownloadRecording}
+                  data-slot="assistant-download-recording"
+                  aria-label="Download replay recording (.txt)"
+                  title="Download replay recording (.txt)"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <DownloadIcon />
+                </Button>
+              ) : null}
+            </div>
+            {showFeedback ? feedback.expansion : null}
           </div>
         ) : null}
       </MessageContent>

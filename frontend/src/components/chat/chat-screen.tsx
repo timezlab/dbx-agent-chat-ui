@@ -32,7 +32,6 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
     send,
     cancel,
     submitFeedback,
-    recordedIds,
     downloadRecording,
     agents,
     selectedAgentId,
@@ -112,7 +111,6 @@ export function ChatScreen({ className, ...props }: ChatScreenProps) {
           onFeedback={submitFeedback}
           firstPlanCallId={firstPlanCallId}
           showMetrics={usageEnabled}
-          recordedIds={recordedIds}
           onDownloadRecording={downloadRecording}
           onSendPrompt={send}
           className="min-h-0 flex-1"
