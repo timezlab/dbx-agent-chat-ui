@@ -234,11 +234,16 @@ describe("buildRecordingFrames", () => {
     expect(replayFrames(msg).parts).toEqual(msg.parts);
   });
 
-  it("reconstructs a suggestions block so it re-extracts on done", () => {
+  it("round-trips an inline `<suggested-followups>` block as plain reply text", () => {
+    // Suggestions live in the text (rendered by Streamdown's custom-tag component), so the
+    // recording carries them as ordinary text deltas — no special part to reconstruct.
     const msg = assistant({
       parts: [
-        { type: "text", text: "The report is ready." },
-        { type: "suggestions", items: ["Break down by region?", "Show Q2 detail?"] },
+        {
+          type: "text",
+          text:
+            "The report is ready.\n\n<suggested-followups><question>Break down by region?</question><question>Show Q2 detail?</question></suggested-followups>",
+        },
       ],
     });
     expect(replayFrames(msg).parts).toEqual(msg.parts);

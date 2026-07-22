@@ -168,19 +168,11 @@ function toolFrames(item: ToolActivityItem): string[] {
   return [call, output];
 }
 
-/** Re-serialize a `suggestions` part as the `<suggested-followups>` block the reducer
- *  extracts on `done`. Emitted as a trailing text delta so it lands on the final text part. */
-function suggestionsFrame(items: string[]): string {
-  const xml =
-    "\n\n<suggested-followups>\n" +
-    items.map((q) => `<question>${q}</question>`).join("\n") +
-    "\n</suggested-followups>";
-  return textDeltaFrame("response.output_text.delta", RECON_TEXT_ITEM_ID, xml);
-}
-
 function partFrames(part: MessagePart): string[] {
   switch (part.type) {
     case "text":
+      // Any `<suggested-followups>` block lives inline in the text (rendered by Streamdown
+      // via a custom-tag component, not a separate part), so it round-trips as normal text.
       return chunkText(part.text).map((d) =>
         textDeltaFrame("response.output_text.delta", RECON_TEXT_ITEM_ID, d),
       );
@@ -190,8 +182,6 @@ function partFrames(part: MessagePart): string[] {
       );
     case "tools":
       return part.items.flatMap(toolFrames);
-    case "suggestions":
-      return [suggestionsFrame(part.items)];
     default:
       return [];
   }

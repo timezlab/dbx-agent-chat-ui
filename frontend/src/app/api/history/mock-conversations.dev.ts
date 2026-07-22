@@ -88,7 +88,7 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
         parts: [
           {
             type: "text",
-            text: "It's a vector database on Databricks that indexes embeddings so you can run similarity search over your Delta tables — the backbone of RAG retrieval.",
+            text: "It's a vector database on Databricks that indexes embeddings so you can run similarity search over your Delta tables — the backbone of RAG retrieval.\n\n<suggested-followups><question>How do I create a Vector Search index?</question><question>What embedding models are supported?</question><question>How does it stay in sync with the source Delta table?</question></suggested-followups>",
           },
         ],
         attachments: [],

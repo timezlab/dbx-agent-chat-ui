@@ -57,6 +57,40 @@ const LINK_SAFETY = {
 /** No-op submit for `useFeedback` when a turn has no feedback sink (hooks run unconditionally). */
 const NOOP_FEEDBACK = () => {};
 
+/** The follow-up block an agent appends to its answer (see docs/backend-integration). It stays
+ *  inline in the reply text; Streamdown renders it via the custom-tag component below, and this
+ *  regex strips it from the plain-text copy so the clipboard never carries raw XML. */
+const SUGGESTIONS_BLOCK = /<suggested-followups>[\s\S]*?<\/suggested-followups>/g;
+
+/** Minimal hast shape we read off Streamdown's `node` prop for the custom tag. */
+type HastNode = {
+  type?: string;
+  tagName?: string;
+  value?: string;
+  children?: HastNode[];
+};
+
+/** Pull the trimmed `<question>` texts out of a `<suggested-followups>` element node. */
+function questionsFromNode(node: HastNode | undefined): string[] {
+  if (!node?.children) return [];
+  return node.children
+    .filter((c) => c.type === "element" && c.tagName === "question")
+    .map((q) =>
+      (q.children ?? [])
+        .map((t) => (t.type === "text" ? (t.value ?? "") : ""))
+        .join("")
+        .trim(),
+    )
+    .filter(Boolean);
+}
+
+/** Custom tags Streamdown must pass through sanitization for the follow-up block to survive
+ *  as structured nodes (both need to be allowed, with no attributes). */
+const SUGGESTION_ALLOWED_TAGS: Record<string, string[]> = {
+  "suggested-followups": [],
+  question: [],
+};
+
 /** Copy the reply's markdown to the clipboard, flipping to a check for a beat as confirmation. */
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = React.useState(false);
@@ -131,11 +165,13 @@ export function AssistantMessage({
     onSubmit: onFeedback ?? NOOP_FEEDBACK,
   });
 
-  // Plain markdown of the reply (its text parts), for the copy action.
+  // Plain markdown of the reply (its text parts), for the copy action — with the inline
+  // follow-up block stripped so the clipboard carries the answer, not raw `<suggested-followups>`.
   const plainText = message.parts
     .filter((p) => p.type === "text")
     .map((p) => p.text)
     .join("\n\n")
+    .replace(SUGGESTIONS_BLOCK, "")
     .trim();
   const showCopy = !streaming && hasVisible && plainText.length > 0;
   const showDownload = onDownloadRecording != null && !streaming && hasVisible;
@@ -144,7 +180,19 @@ export function AssistantMessage({
   const contentRef = React.useRef<HTMLDivElement>(null);
   useOverlayTables(contentRef);
 
-  const suggestionsPart = message.parts.find((p) => p.type === "suggestions");
+  // Streamdown renders the reply's `<suggested-followups>` block inline via this custom-tag
+  // component (kept in the text, not split into a separate part) — memoized so the closure over
+  // `onSendPrompt` is stable across frames.
+  const markdownComponents = React.useMemo(
+    () => ({
+      "suggested-followups": ({ node }: { node?: HastNode }) => {
+        const items = questionsFromNode(node);
+        if (items.length === 0) return null;
+        return <FollowUpSuggestions items={items} onSelectPrompt={onSendPrompt} />;
+      },
+    }),
+    [onSendPrompt],
+  );
 
   return (
     <MessageRow
@@ -193,10 +241,12 @@ export function AssistantMessage({
                       data-slot="assistant-markdown"
                       shikiTheme={SHIKI_THEME}
                       linkSafety={LINK_SAFETY}
+                      allowedTags={SUGGESTION_ALLOWED_TAGS}
+                      components={markdownComponents}
                       isAnimating={
                         streaming && i === lastSegment && bi === lastMd
                       }
-                      className="min-w-0 animate-in fade-in-0 slide-in-from-bottom-1 text-sm leading-relaxed duration-300 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_ul]:list-disc [&_ul]:list-outside [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:list-outside [&_ol]:pl-6"
+                      className="min-w-0 animate-in fade-in-0 slide-in-from-bottom-1 text-sm leading-relaxed duration-300 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_ul]:list-disc [&_ul]:list-outside [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:list-outside [&_ol]:pl-6 **:data-[streamdown=link]:cursor-pointer"
                     >
                       {block.text}
                     </Streamdown>
@@ -247,13 +297,6 @@ export function AssistantMessage({
         ) : null}
 
         {message.error ? <StreamError message={message.error} /> : null}
-
-        {suggestionsPart?.type === "suggestions" && suggestionsPart.items.length > 0 ? (
-          <FollowUpSuggestions
-            items={suggestionsPart.items}
-            onSelectPrompt={onSendPrompt}
-          />
-        ) : null}
 
         {/* Usage/metrics footer: a live clock while streaming (client-measured time · TTFT),
             then tokens · cost once the backend `usage` frame lands. Self-hides when there is

@@ -3,7 +3,6 @@ import type {
   ReasoningPart,
   TextPart,
   ToolsPart,
-  SuggestionsPart,
 } from "@/entities";
 
 /** A reasoning or tools part — the "work" the agent does between answer text. */
@@ -28,16 +27,13 @@ export type PartSegment =
 export function groupMessageParts(parts: MessagePart[]): PartSegment[] {
   const segments: PartSegment[] = [];
   parts.forEach((part, index) => {
-    if (part.type === "suggestions") {
-      return; // Ignore suggestions here; handled separately in AssistantMessage
-    }
     if (part.type === "text") {
       segments.push({ kind: "text", index, part });
       return;
     }
     const last = segments[segments.length - 1];
     if (last && last.kind === "activity") {
-      // We can assert here because we already filtered out 'text' and 'suggestions'
+      // We can assert here because we already filtered out 'text'
       last.parts.push(part as ActivityPart);
     } else {
       segments.push({ kind: "activity", index, parts: [part as ActivityPart] });

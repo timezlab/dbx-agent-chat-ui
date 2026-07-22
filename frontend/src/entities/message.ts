@@ -115,18 +115,10 @@ export type ReasoningPart = z.infer<typeof ReasoningPartSchema>;
  *  - reasoning → nối vào `reasoning` part cuối; nếu part cuối khác `reasoning` thì mở mới.
  *  - khi done: bỏ mọi `text`/`reasoning` part rỗng sau trim (vd đợt chỉ có 1 space).
  */
-export const SuggestionsPartSchema = z.object({
-  type: z.literal("suggestions"),
-  items: z.array(z.string()),
-});
-export type SuggestionsPart = z.infer<typeof SuggestionsPartSchema>;
-
-
 export const MessagePartSchema = z.discriminatedUnion("type", [
   TextPartSchema,
   ToolsPartSchema,
   ReasoningPartSchema,
-  SuggestionsPartSchema,
 ]);
 export type MessagePart = z.infer<typeof MessagePartSchema>;
 

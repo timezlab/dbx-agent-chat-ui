@@ -248,3 +248,25 @@ describe("reduceStreamEvent — usage metrics", () => {
     expect(tools?.type === "tools" && tools.items[0].durationMs).toBe(1234);
   });
 });
+
+describe("reduceStreamEvent — suggested-followups", () => {
+  it("keeps the `<suggested-followups>` block inline in the text part on done", () => {
+    // The block is no longer split into a separate part — it stays in the reply text and is
+    // rendered by Streamdown's custom-tag component (live AND on reload alike).
+    let c = streamingConversation();
+    c = reduceStreamEvent(c, {
+      type: "token",
+      delta:
+        "The report is ready.\n\n<suggested-followups><question>Break down by region?</question></suggested-followups>",
+    });
+    c = reduceStreamEvent(c, { type: "done" });
+
+    expect(assistant(c).parts).toEqual([
+      {
+        type: "text",
+        text:
+          "The report is ready.\n\n<suggested-followups><question>Break down by region?</question></suggested-followups>",
+      },
+    ]);
+  });
+});
